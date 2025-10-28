@@ -887,35 +887,9 @@ class _AudioScreenState extends State<AudioScreen> with WidgetsBindingObserver {
               _downloadManager.formatFileSize(totalSize),
             ),
             SizedBox(height: 16.h),
-            Container(
-              padding: EdgeInsets.all(12.w),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8.r),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded,
-                    color: AppColors.primary,
-                    size: 20.sp,
-                  ),
-                  SizedBox(width: 8.w),
-                  Expanded(
-                    child: Text(
-                      'Yuklab olingan fayllar sizning qurilmangizda saqlanadi',
-                      style: AppStyle.font400(AppColors.primary).copyWith(fontSize: 11.sp),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Bekor qilish', style: AppStyle.font400(AppColors.grey)),
-          ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
@@ -937,7 +911,7 @@ class _AudioScreenState extends State<AudioScreen> with WidgetsBindingObserver {
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, size: 18.sp, color: AppColors.grey),
+        Icon(icon, size: 18.sp, color: AppColors.primary),
         SizedBox(width: 8.w),
         Text(
           '$label: ',
@@ -991,7 +965,7 @@ class _AudioScreenState extends State<AudioScreen> with WidgetsBindingObserver {
             ),
             SizedBox(width: 12.w),
             Expanded(
-              child: Text('Yuklab olish boshlandi. Orqada davom etadi...'),
+              child: Text('Yuklab olish boshlandi....'),
             ),
           ],
         ),

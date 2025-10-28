@@ -2,8 +2,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-
-import '../../../../database/database_helper.dart';
+import 'package:sahhof/src/database/database_helper.dart';
 
 class AudioDownloadManager {
   static final AudioDownloadManager _instance = AudioDownloadManager._internal();
@@ -175,7 +174,7 @@ class AudioDownloadManager {
     required String coverImage,
     required int audioDuration,
     required String authorName,
-    required List<Map<String, dynamic>> parts, // {id, name, url, size}
+    required List<Map<String, dynamic>> parts, // {id, name, url, size, format}
     Function(double)? onTotalProgress,
   }) async {
     try {
@@ -213,50 +212,29 @@ class AudioDownloadManager {
         totalSize: totalSize,
       );
 
-      // Insert parts to database
-      List<int> partDbIds = [];
-      for (var part in parts) {
-        try {
-          final partId = await _dbHelper.insertAudioPart(
-            bookId: dbBookId,
-            partId: part['id'] ?? 0,
-            name: part['name'] ?? 'Unknown',
-            path: '',
-            url: part['url'] ?? '',
-            size: part['size'] ?? 0,
-          );
-          partDbIds.add(partId);
-        } catch (e) {
-          print('Error inserting part: $e');
-          throw Exception('Failed to insert part to database');
-        }
-      }
+      print('Book inserted with DB ID: $dbBookId');
 
       // Download each part
       int downloadedParts = 0;
       for (int i = 0; i < parts.length; i++) {
         final part = parts[i];
-        final partDbId = partDbIds[i];
 
         try {
           // Generate safe filename
           final partName = part['name']?.toString() ?? 'audio_$i';
           final sanitizedName = _sanitizeFileName(partName);
-          final format = part['format']?.toString() ?? 'mp3';
+          final partFormat = part['format']?.toString() ?? 'mp3';
           final partId = part['id']?.toString() ?? i.toString();
-          final fileName = '${bookId}_part_${partId}_${sanitizedName}.$format';
+          final fileName = '${bookId}_part_${partId}_$sanitizedName.$partFormat';
 
-          print('Downloading: $fileName');
+          print('Downloading part ${i + 1}/${parts.length}: $fileName');
 
           final localPath = await downloadAudioFile(
             url: part['url'] ?? '',
             fileName: fileName,
-            partId: partDbId,
+            partId: part['id'] ?? i,
             onProgress: (progress) async {
               try {
-                // Update part progress in database
-                // await _dbHelper.updatePartProgress(partDbId, progress);
-
                 // Calculate total book progress
                 final totalProgress = (downloadedParts + progress) / parts.length;
                 onTotalProgress?.call(totalProgress);
@@ -267,23 +245,31 @@ class AudioDownloadManager {
           );
 
           if (localPath != null && localPath.isNotEmpty) {
-            // Mark part as downloaded
-            // await _dbHelper.markPartAsDownloaded(partDbId, localPath);
+            // Insert audio part with downloaded path
+            await _dbHelper.insertAudioPart(
+              bookId: dbBookId,
+              partId: part['id'] ?? i,
+              name: part['name'] ?? 'Unknown',
+              path: localPath,
+              url: part['url'] ?? '',
+              size: part['size'] ?? 0,
+            );
+
             downloadedParts++;
-            print('Downloaded part $downloadedParts/${parts.length}');
+            print('✅ Downloaded part $downloadedParts/${parts.length}');
           } else {
             throw Exception('Failed to download part: $partName');
           }
         } catch (e) {
-          print('Part download error: $e');
+          print('❌ Part download error: $e');
           throw Exception('Failed to download part ${i + 1}: $e');
         }
       }
 
-      print('All parts downloaded successfully');
+      print('🎉 All parts downloaded successfully');
       return true;
     } catch (e) {
-      print('Book download error: $e');
+      print('❌ Book download error: $e');
       // Clean up on error
       try {
         await _dbHelper.deleteBook(bookId);
@@ -312,19 +298,34 @@ class AudioDownloadManager {
   // Delete downloaded book
   Future<bool> deleteDownloadedBook(int bookId) async {
     try {
-      final parts = await _dbHelper.getAudioParts(bookId);  // ✅ Model
+      // Get all parts from database
+      final parts = await _dbHelper.getAudioParts(bookId);
+
+      print('Deleting book $bookId with ${parts.length} parts');
+
+      // Delete files
       for (var part in parts) {
-        if (part.path.isNotEmpty) {  // ✅ Property check
-          String path = part.path;
+        if (part.path.isNotEmpty) {
+          final file = File(part.path);
+          if (await file.exists()) {
+            await file.delete();
+            print('✅ Deleted file: ${part.path}');
+          } else {
+            print('⚠️ File not found: ${part.path}');
+          }
         }
       }
 
       // Delete from database
-      await _dbHelper.deleteBook(bookId);
+      final deleted = await _dbHelper.deleteBook(bookId);
 
-      return true;
+      if (deleted) {
+        print('✅ Book deleted from database');
+      }
+
+      return deleted;
     } catch (e) {
-      print('Delete error: $e');
+      print('❌ Delete error: $e');
       return false;
     }
   }
@@ -335,28 +336,102 @@ class AudioDownloadManager {
   }
 
   // Get download progress
-  // Future<double> getBookDownloadProgress(int bookId) async {
-  //   return await _dbHelper.getBookDownloadProgress(bookId);
-  // }
+  Future<double> getBookDownloadProgress(int bookId) async {
+    return await _dbHelper.getDownloadProgress(bookId);
+  }
 
   // Get local file paths
-  // Future<List<String>> getBookLocalPaths(int bookId) async {
-  //   final parts = await _dbHelper.getBookParts(bookId);
-  //   return parts
-  //       .where((part) => part['is_downloaded'] == 1)
-  //       .map((part) => part['path'] as String)
-  //       .toList();
-  // }
+  Future<List<String>> getBookLocalPaths(int bookId) async {
+    final parts = await _dbHelper.getAudioParts(bookId);
+    return parts
+        .where((part) => part.path.isNotEmpty)
+        .map((part) => part.path)
+        .toList();
+  }
 
   // Get downloaded books
-  // Future<List<Map<String, dynamic>>> getDownloadedBooks() async {
-  //   // return await _dbHelper.getAllDownloadedBooks();
-  // }
+  Future<List<Map<String, dynamic>>> getDownloadedBooks() async {
+    final books = await _dbHelper.getAllDownloadedBooks();
+    return books
+        .map((book) => {
+      'id': book.id,
+      'book_id': book.bookId,
+      'title': book.title,
+      'author_name': book.authorName,
+      'cover_image': book.coverImage,
+      'total_size': book.totalSize,
+      'audio_duration': book.audioDuration,
+      'downloaded_at': book.downloadedAt,
+      'formatted_size': book.formattedSize,
+      'formatted_duration': book.formattedDuration,
+      'last_played_position': book.lastPlayedPosition,
+      'last_played_at': book.lastPlayedAt,
+    })
+        .toList();
+  }
 
   // Get total downloaded size
   Future<String> getTotalDownloadedSize() async {
     final bytes = await _dbHelper.getTotalDownloadedSize();
     return _formatBytes(bytes);
+  }
+
+  // Get book details
+  Future<Map<String, dynamic>?> getBookDetails(int bookId) async {
+    final book = await _dbHelper.getDownloadedBook(bookId);
+    if (book == null) return null;
+
+    return {
+      'id': book.id,
+      'book_id': book.bookId,
+      'title': book.title,
+      'author_name': book.authorName,
+      'cover_image': book.coverImage,
+      'total_size': book.totalSize,
+      'audio_duration': book.audioDuration,
+      'downloaded_at': book.downloadedAt,
+      'formatted_size': book.formattedSize,
+      'formatted_duration': book.formattedDuration,
+      'last_played_position': book.lastPlayedPosition,
+      'last_played_at': book.lastPlayedAt,
+    };
+  }
+
+  // Update playback position
+  Future<void> updatePlaybackPosition(int bookId, int position) async {
+    await _dbHelper.updateLastPlayedPosition(bookId, position);
+  }
+
+  // Search downloaded books
+  Future<List<Map<String, dynamic>>> searchBooks(String query) async {
+    final books = await _dbHelper.searchDownloadedBooks(query);
+    return books
+        .map((book) => {
+      'id': book.id,
+      'book_id': book.bookId,
+      'title': book.title,
+      'author_name': book.authorName,
+      'cover_image': book.coverImage,
+      'formatted_size': book.formattedSize,
+      'formatted_duration': book.formattedDuration,
+    })
+        .toList();
+  }
+
+  // Get recently played books
+  Future<List<Map<String, dynamic>>> getRecentlyPlayed({int limit = 10}) async {
+    final books = await _dbHelper.getRecentlyPlayedBooks(limit: limit);
+    return books
+        .map((book) => {
+      'id': book.id,
+      'book_id': book.bookId,
+      'title': book.title,
+      'author_name': book.authorName,
+      'cover_image': book.coverImage,
+      'last_played_position': book.lastPlayedPosition,
+      'last_played_at': book.lastPlayedAt,
+    })
+        .toList();
   }
 
   // Sanitize filename
@@ -387,5 +462,57 @@ class AudioDownloadManager {
   // Format file size
   String formatFileSize(int bytes) {
     return _formatBytes(bytes);
+  }
+
+  // Clear all downloads
+  Future<void> clearAllDownloads() async {
+    try {
+      // Get all books
+      final books = await _dbHelper.getAllDownloadedBooks();
+
+      // Delete all files
+      for (var book in books) {
+        final parts = await _dbHelper.getAudioParts(book.bookId);
+        for (var part in parts) {
+          if (part.path.isNotEmpty) {
+            final file = File(part.path);
+            if (await file.exists()) {
+              await file.delete();
+            }
+          }
+        }
+      }
+
+      // Clear database
+      await _dbHelper.clearAllDownloads();
+
+      print('✅ All downloads cleared');
+    } catch (e) {
+      print('❌ Clear all error: $e');
+    }
+  }
+
+  // Get storage info
+  Future<Map<String, dynamic>> getStorageInfo() async {
+    try {
+      final directory = await getDownloadDirectory();
+      final totalBytes = await _dbHelper.getTotalDownloadedSize();
+      final booksCount = await _dbHelper.getDownloadedBooksCount();
+
+      return {
+        'total_size': totalBytes,
+        'formatted_size': _formatBytes(totalBytes),
+        'books_count': booksCount,
+        'storage_path': directory.path,
+      };
+    } catch (e) {
+      print('Storage info error: $e');
+      return {
+        'total_size': 0,
+        'formatted_size': '0 B',
+        'books_count': 0,
+        'storage_path': '',
+      };
+    }
   }
 }
