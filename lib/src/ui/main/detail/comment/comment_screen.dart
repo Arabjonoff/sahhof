@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:sahhof/src/api/repository.dart';
+import 'package:sahhof/src/bloc/book/book_detail_bloc.dart';
 import 'package:sahhof/src/model/http_result.dart';
 import 'package:sahhof/src/theme/app_colors.dart';
 import 'package:sahhof/src/theme/app_style.dart';
@@ -94,17 +95,18 @@ class _CommentScreenState extends State<CommentScreen> {
               ),
             ),
           ),
-          ButtonWidget(isLoad: isLoad,text: "Tastiqlash", textColor: AppColors.white, backgroundColor: AppColors.blue, onTap: ()async{
+          ButtonWidget(isLoad: isLoad,text: "Tasdiqlash", textColor: AppColors.white, backgroundColor: AppColors.blue, onTap: ()async{
             isLoad = true;
             setState(() {});
             Repository repository = Repository();
             HttpResult result = await repository.addCommentRating(widget.id, {"rating": rating.toString(), "comment": commentController.text});
-            if(result.status == 200) {
+            if(result.status>= 200&& result.status<299) {
+              bookDetailBloc.getBookDetail(widget.id);
               Navigator.pop(context);
             }else{
               isLoad = false;
               setState(() {});
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.result.toString())));
+              // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(result.result.toString())));
             }
           }),
           SizedBox(height: 34.h,)

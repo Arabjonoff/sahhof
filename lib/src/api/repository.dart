@@ -26,6 +26,8 @@ class Repository{
   Future<HttpResult> verification(int id,code)async => await _apiProvider.verification(id,code);
   Future<HttpResult> getCategories()async => await _apiProvider.getCategories();
   Future<HttpResult> getBooks(id)async => await _apiProvider.getBooks(id);
+  Future<HttpResult> searchBook(id)async => await _apiProvider.searchBook(id);
+  Future<HttpResult> getAuthorId(id)async => await _apiProvider.getAuthorId(id);
   Future<HttpResult> getBookById(int id)async => await _apiProvider.getBookById(id);
   Future<HttpResult> addCommentRating(int id,data)async => await _apiProvider.addCommentRating(id,data);
   Future<HttpResult> addBookMark(int id)async => await _apiProvider.addBookMark(id);

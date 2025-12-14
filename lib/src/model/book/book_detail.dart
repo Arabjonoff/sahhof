@@ -20,12 +20,14 @@ class BookDetailModel {
   DateTime createdAt;
   DateTime updatedAt;
   String title;
+  String language;
   String format;
   String paymentType;
   String description;
   String coverImage;
   dynamic publishedDate;
   int price;
+  int pdf_total_pages;
   String rating;
   int saved;
   int downloads;
@@ -36,10 +38,13 @@ class BookDetailModel {
   dynamic voice;
   bool active;
   int createdBy;
+  int audio_duration;
   dynamic updatedBy;
 
   BookDetailModel({
     required this.id,
+    required this.pdf_total_pages,
+    required this.audio_duration,
     required this.pdfFile,
     required this.contents,
     required this.comments,
@@ -66,6 +71,7 @@ class BookDetailModel {
     required this.active,
     required this.createdBy,
     required this.updatedBy,
+    required this.language,
   });
 
   factory BookDetailModel.fromJson(Map<String, dynamic> json) => BookDetailModel(
@@ -85,7 +91,8 @@ class BookDetailModel {
     coverImage: json["cover_image"]??"",
     publishedDate: json["published_date"]??"",
     price: json["price"]??0,
-    rating: json["rating"]??"",
+    rating: json["rating"].toString().substring(0,3)??'',
+    language: json["language"]??"",
     saved: json["saved"]??0,
     downloads: json["downloads"]??0,
     views: json["views"]??0,
@@ -96,6 +103,8 @@ class BookDetailModel {
     active: json["active"]??false,
     createdBy: json["created_by"]??0,
     updatedBy: json["updated_by"]??0,
+    audio_duration: json["audio_duration"]??0,
+    pdf_total_pages: json["pdf_total_pages"]??0,
   );
 
   Map<String, dynamic> toJson() => {

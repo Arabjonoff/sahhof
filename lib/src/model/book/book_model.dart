@@ -73,7 +73,7 @@ class BookResult {
     coverImage: json["cover_image"]??"",
     publishedDate: json["published_date"] == null ? DateTime.now() :DateTime.parse(json["published_date"]),
     price: json["price"]??0,
-    rating: json["rating"]??0,
+    rating: json["rating"].toString().substring(0,3)??'',
     saved: json["saved"]??0,
     downloads: json["downloads"]??0,
     views: json["views"]??0,

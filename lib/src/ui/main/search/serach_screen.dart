@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:sahhof/src/bloc/author/author_bloc.dart';
 import 'package:sahhof/src/model/author/author_model.dart';
+import 'package:sahhof/src/ui/main/author/author_screen.dart';
 import 'package:sahhof/src/ui/main/search/books_search_screen.dart';
 
 import '../../../bloc/category/category_bloc.dart';
@@ -116,6 +117,9 @@ class _SearchScreenState extends State<SearchScreen> {
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2,childAspectRatio: 3.5.sp,crossAxisSpacing: 10.w,mainAxisSpacing: 10.h), itemBuilder: (ctx,index){
                     return GestureDetector(
                       onTap: (){
+                        Navigator.push(context, MaterialPageRoute(builder: (ctx){
+                          return AuthorScreen(author: data[index],);
+                        }));
                       },
                       child: Container(
                         padding: EdgeInsets.symmetric(horizontal: 2.w,vertical: 4.h),

@@ -46,15 +46,16 @@
     <key>UIApplicationSupportsIndirectInputEvents</key>
     <true/>
 
-    <!-- Background audio va processing uchun -->
+    <!-- Background modes - BIRLASHTIRILGAN -->
     <key>UIBackgroundModes</key>
     <array>
        <string>audio</string>
-       <string>background-processing</string>
-       <string>background-fetch</string>
+       <string>fetch</string>
+       <string>processing</string>
+       <string>remote-notification</string>
     </array>
 
-    <!-- Network security settings -->
+    <!-- Network security settings - BIRLASHTIRILGAN -->
     <key>NSAppTransportSecurity</key>
     <dict>
        <key>NSAllowsArbitraryLoads</key>
@@ -69,14 +70,22 @@
     <key>NSMicrophoneUsageDescription</key>
     <string>Sahhof ilovasida audio kitoblarni eshitish uchun audio ruxsati kerak</string>
 
-    <!-- Audio session category (iOS 14+) -->
+    <!-- flutter_downloader uchun kerakli permission -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Yuklab olingan fayllarni saqlash uchun ruxsat kerak</string>
+
+    <!-- Audio session category -->
     <key>AVAudioSessionCategoryPlayback</key>
     <true/>
 
-    <!-- Lock screen va control center da media controls ko'rinishi uchun -->
     <key>UIRequiredDeviceCapabilities</key>
     <array>
-        <string>audio-output</string>
+        <string>armv7</string>
+    </array>
+
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>uz.naqshsoft.sahhof.refresh</string>
     </array>
 
     <!-- iOS 17+ uchun privacy manifest -->
@@ -92,7 +101,7 @@
         </dict>
     </array>
 
-    <!-- File provider extensions uchun (agar kerak bo'lsa) -->
+    <!-- File sharing settings -->
     <key>LSSupportsOpeningDocumentsInPlace</key>
     <false/>
     <key>UIFileSharingEnabled</key>
@@ -103,27 +112,5 @@
     <string>UIStatusBarStyleDefault</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
-
-    <!-- Minimum iOS version -->
-    <key>MinimumOSVersion</key>
-    <string>12.0</string>
-
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>fetch</string>
-        <string>processing</string>
-        <string>remote-notification</string>
-    </array>
-
-    <key>NSAllowsArbitraryLoads</key>
-    <true/>
-
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsArbitraryLoads</key>
-        <true/>
-    </dict>
-
-
 </dict>
 </plist>

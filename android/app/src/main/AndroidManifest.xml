@@ -1,14 +1,49 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.INTERNET"/> <!-- Add this -->
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+<manifest xmlns:tools="http://schemas.android.com/tools"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ======================== -->
+    <!-- INTERNET RUXSATLARI      -->
+    <!-- ======================== -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- ======================== -->
+    <!-- AUDIO PLAYBACK RUXSATLARI -->
+    <!-- ======================== -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- ======================== -->
+    <!-- STORAGE RUXSATLARI       -->
+    <!-- ======================== -->
+    <!-- Android 12 va undan past uchun -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32"
+        tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Android 13+ uchun -->
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <!-- ======================== -->
+    <!-- NOTIFICATION RUXSATI      -->
+    <!-- ======================== -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:label="Buxoro sahifalari"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:label="Buxoro sahifalari"
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true"
+        android:requestLegacyExternalStorage="true"
+        android:enableOnBackInvokedCallback="true">
 
+        <!-- ======================== -->
+        <!-- 1. ASOSIY ACTIVITY        -->
+        <!-- ======================== -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -24,52 +59,110 @@
                 android:resource="@style/NormalTheme" />
 
             <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- ============= AUDIO SERVICE ============= -->
+        <!-- ======================== -->
+        <!-- 2. AUDIO SERVICE ACTIVITY -->
+        <!-- ======================== -->
+        <activity
+            android:name="com.ryanheise.audioservice.AudioServiceActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+        </activity>
+
+        <!-- ======================== -->
+        <!-- 3. AUDIO SERVICE          -->
+        <!-- ======================== -->
         <service
             android:name="com.ryanheise.audioservice.AudioService"
             android:foregroundServiceType="mediaPlayback"
-            android:exported="true">
+            android:exported="true"
+            tools:ignore="Instantiatable">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
 
-        <!-- ============= MEDIA BUTTON RECEIVER ============= -->
+        <!-- ======================== -->
+        <!-- 4. MEDIA BUTTON RECEIVER  -->
+        <!-- ======================== -->
         <receiver
             android:name="com.ryanheise.audioservice.MediaButtonReceiver"
-            android:exported="true">
+            android:exported="true"
+            tools:ignore="Instantiatable">
             <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
 
-        <!-- Flutter Downloader provider -->
+        <!-- ======================== -->
+        <!-- 5. FLUTTER DOWNLOADER     -->
+        <!-- ======================== -->
         <provider
-            android:name="vn.hunghd.flutterdownloader.DownloadWorker$FlutterDownloadProvider"
+            android:name="vn.hunghd.flutterdownloader.DownloadedFileProvider"
             android:authorities="${applicationId}.flutter_downloader.provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/provider_paths"/>
+                android:resource="@xml/provider_paths" />
         </provider>
 
-        <!-- Flutter meta-data -->
+        <!-- ======================== -->
+        <!-- 6. FILE PROVIDER (Qo'shimcha) -->
+        <!-- (Agar kerak bo'lsa uncommit qiling) -->
+        <!-- ======================== -->
+        <!--
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+        -->
+
+        <!-- ======================== -->
+        <!-- 7. FLUTTER EMBEDDING      -->
+        <!-- ======================== -->
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
     </application>
 
-    <!-- For ProcessText plugin -->
+    <!-- ======================== -->
+    <!-- QUERIES                   -->
+    <!-- ======================== -->
     <queries>
+        <!-- PROCESS_TEXT uchun -->
         <intent>
-            <action android:name="android.intent.action.PROCESS_TEXT"/>
-            <data android:mimeType="text/plain"/>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+
+        <!-- HTTP/HTTPS uchun -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="http" />
         </intent>
     </queries>
+
 </manifest>

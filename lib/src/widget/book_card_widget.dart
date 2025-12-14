@@ -5,11 +5,11 @@ import 'package:sahhof/src/theme/app_colors.dart';
 import 'package:sahhof/src/theme/app_style.dart';
 class BookCardWidget extends StatelessWidget {
   final String image;
-  final String title,description;
+  final String title,description,star;
   final String author;
   final Function() onTap;
   final bool isVertical;
-  const BookCardWidget({super.key, required this.image, required this.onTap, required this.title, required this.author, this.isVertical = true, required this.description});
+  const BookCardWidget({super.key, required this.image, required this.onTap, required this.title, required this.author, this.isVertical = true, required this.description, required this.star});
 
   @override
   Widget build(BuildContext context) {
@@ -42,22 +42,19 @@ class BookCardWidget extends StatelessWidget {
               ),
             ),
             Positioned(
-              right: 17.sp,
-              top: 15.sp,
+              right: 37.sp,
+              top: 18.sp,
               child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.only(
-                    bottomLeft: Radius.circular(10),
-                    topRight: Radius.circular(10)
-                  ),
+                  borderRadius: BorderRadius.circular(10),
                   color: Colors.orange
                 ),
-                padding: EdgeInsets.symmetric(vertical: 4,horizontal: 12),
+                padding: EdgeInsets.symmetric(vertical: 4,horizontal: 8),
                 child: Row(
                   children: [
                     Icon(Icons.star,color: AppColors.white,size: 16.sp,),
                     SizedBox(width: 4,),
-                    Text("4.5",style: AppStyle.font500(AppColors.white),),
+                    Text(star,style: AppStyle.font500(AppColors.white),),
                   ],
                 ),
               ),

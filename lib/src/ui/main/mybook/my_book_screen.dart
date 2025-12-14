@@ -14,7 +14,7 @@ class _MyBooksPageState extends State<MyBooksPage> {
   @override
   void initState() {
     super.initState();
-    pdfBloc.getPdfFiles(); // 📥 Barcha yuklangan PDF’larni olish
+    pdfBloc.getPdfFiles();
   }
 
   @override
@@ -93,10 +93,8 @@ class _MyBooksPageState extends State<MyBooksPage> {
                         book.downloadDate,
                         (book.size / 1024 / 1024).toStringAsFixed(1) + " MB",
                             () {
-                          // PDF faylni ochish (agar kerak bo‘lsa)
                           File file = File(book.path);
                           if (file.existsSync()) {
-                            // PDF ko‘ruvchi sahifaga o‘tish yoki ochish
                           }
                         },
                             () async {

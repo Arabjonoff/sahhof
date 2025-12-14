@@ -5,10 +5,12 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:sahhof/src/model/pdf/pdf_file.dart';
 import 'package:sahhof/src/theme/app_colors.dart';
 import 'package:sahhof/src/theme/app_style.dart';
+import 'package:sahhof/src/ui/main/detail/audio/audio_screen.dart';
 import 'package:sahhof/src/ui/main/detail/audio/auido_dowload.dart';
 import 'package:sahhof/src/ui/main/detail/read/read_screen.dart';
 
 import '../../../bloc/pdf/pdf_bloc.dart' show pdfBloc;
+import '../detail/audio/local_audio.dart';
 
 class MyDownloadsScreen extends StatefulWidget {
   const MyDownloadsScreen({super.key});
@@ -185,13 +187,14 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background ?? Colors.grey[50],
-      appBar: _isAudioSelectionMode ? _buildAudioSelectionAppBar() : _buildNormalAppBar(),
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        title: Text("Kutubxona"),
+      ),
+      backgroundColor: AppColors.background,
       body: Column(
         children: [
-          // Main TabBar (PDF / Audio)
           if (!_isAudioSelectionMode) _buildMainTabBar(),
-
           // Content
           Expanded(
             child: TabBarView(
@@ -215,92 +218,6 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
     );
   }
 
-  PreferredSizeWidget _buildNormalAppBar() {
-    final isPdfTab = _mainTabController.index == 0;
-
-    return AppBar(
-      backgroundColor: AppColors.primary ?? Colors.blue,
-      elevation: 0,
-      title: Text(
-        'Yuklanmalar',
-        style: AppStyle.font600(Colors.white).copyWith(fontSize: 20.sp),
-      ),
-      actions: [
-        if (!isPdfTab) ...[
-          IconButton(
-            onPressed: () {
-              setState(() {
-                _isAudioGridView = !_isAudioGridView;
-              });
-            },
-            icon: Icon(
-              _isAudioGridView ? Icons.list_rounded : Icons.grid_view_rounded,
-              color: Colors.white,
-            ),
-          ),
-          IconButton(
-            onPressed: _showAudioSortDialog,
-            icon: Icon(Icons.sort_rounded, color: Colors.white),
-          ),
-        ],
-
-        PopupMenuButton<String>(
-          icon: Icon(Icons.more_vert_rounded, color: Colors.white),
-          onSelected: (value) {
-            switch (value) {
-              case 'select':
-                if (!isPdfTab) {
-                  setState(() {
-                    _isAudioSelectionMode = true;
-                  });
-                }
-                break;
-              case 'storage':
-                _showStorageInfo();
-                break;
-              case 'refresh':
-                _loadAllData();
-                break;
-            }
-          },
-          itemBuilder: (context) => [
-            if (!isPdfTab)
-              PopupMenuItem(
-                value: 'select',
-                child: Row(
-                  children: [
-                    Icon(Icons.checklist_rounded, size: 20.sp),
-                    SizedBox(width: 12.w),
-                    Text('Tanlash rejimi'),
-                  ],
-                ),
-              ),
-            PopupMenuItem(
-              value: 'storage',
-              child: Row(
-                children: [
-                  Icon(Icons.storage_rounded, size: 20.sp),
-                  SizedBox(width: 12.w),
-                  Text('Xotira ma\'lumoti'),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 'refresh',
-              child: Row(
-                children: [
-                  Icon(Icons.refresh_rounded, size: 20.sp),
-                  SizedBox(width: 12.w),
-                  Text('Yangilash'),
-                ],
-              ),
-            ),
-          ],
-        ),
-        SizedBox(width: 8.w),
-      ],
-    );
-  }
 
   PreferredSizeWidget _buildAudioSelectionAppBar() {
     return AppBar(
@@ -417,9 +334,9 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.picture_as_pdf_rounded, size: 18.sp),
+                Icon(Icons.chrome_reader_mode_outlined, size: 18.sp),
                 SizedBox(width: 8.w),
-                Text('PDF'),
+                Text('Ebook'),
               ],
             ),
           ),
@@ -437,37 +354,21 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
       ),
     );
   }
-
   // ==================== PDF TAB ====================
-
   Widget _buildPdfTab() {
     return Column(
       children: [
-        // PDF Search
-        _buildSearchBar(
-          hint: 'PDF kitoblarni qidiring...',
-          onChanged: (query) {
-            // PDF search logic
-          },
-        ),
-
         // PDF List
         Expanded(
           child: StreamBuilder<List<PdfFile>>(
-            // UNCOMMENT qiling
             stream: pdfBloc.pdfStream,
-            // stream: Stream.value(<PdfFile>[]), // Test uchun
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return Center(child: CircularProgressIndicator(color: AppColors.primary));
               }
 
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return _buildEmptyState(
-                  icon: Icons.picture_as_pdf_rounded,
-                  title: 'Yuklab olingan PDF kitoblar yo\'q',
-                  subtitle: 'PDF kitoblarni yuklab olib, offline o\'qing',
-                );
+                return Text("Kitoblar yoq");
               }
 
               final pdfs = snapshot.data!;
@@ -494,10 +395,17 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
   }
 
   Widget _buildPdfItem(PdfFile pdf) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: AppColors.white,
+        boxShadow:[
+          BoxShadow(
+            color: Colors.grey,blurRadius: 3,spreadRadius: -1
+          )
+        ]
+      ),
       margin: EdgeInsets.only(bottom: 12.h),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-      elevation: 2,
       child: InkWell(
         onTap: () {
           // UNCOMMENT qiling
@@ -532,8 +440,6 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
               ),
 
               SizedBox(width: 12.w),
-
-              // Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,7 +465,7 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
                         Icon(Icons.calendar_today_rounded, size: 12.sp, color: AppColors.grey),
                         SizedBox(width: 4.w),
                         Text(
-                          pdf.downloadDate,
+                          pdf.downloadDate.substring(0,16),
                           style: AppStyle.font400(AppColors.grey).copyWith(fontSize: 11.sp),
                         ),
                         SizedBox(width: 12.w),
@@ -574,7 +480,6 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
                   ],
                 ),
               ),
-
               SizedBox(width: 8.w),
 
               // Delete button
@@ -648,16 +553,6 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
   Widget _buildAudioTab() {
     return Column(
       children: [
-        // Audio Sub-Tabs
-
-        // Audio Search (faqat "Hammasi" tab da)
-        if (!_isAudioSelectionMode && _audioTabController.index == 0)
-          _buildSearchBar(
-            hint: 'Audio kitoblarni qidiring...',
-            onChanged: _searchAudio,
-          ),
-
-        // Audio Content
         Expanded(
           child: _isLoading
               ? Center(child: CircularProgressIndicator(color: AppColors.primary))
@@ -665,8 +560,6 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
             controller: _audioTabController,
             children: [
               _buildAllAudioTab(),
-              _buildRecentAudioTab(),
-              _buildFavoritesTab(),
             ],
           ),
         ),
@@ -701,20 +594,25 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
         final book = _filteredAudioBooks[index];
         final isSelected = _selectedAudioBooks.contains(book['book_id']);
 
-        return Card(
-          margin: EdgeInsets.only(bottom: 12.h),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16.r),
-            side: isSelected
-                ? BorderSide(color: AppColors.primary ?? Colors.blue, width: 2)
-                : BorderSide.none,
+        return Container(
+          margin: EdgeInsets.symmetric(vertical: 4.sp),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            color: AppColors.white,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.black,blurRadius: 5,spreadRadius: -4
+              )
+            ]
           ),
           child: InkWell(
             onTap: () {
               if (_isAudioSelectionMode) {
                 _toggleAudioBookSelection(book['book_id']);
               } else {
-                // Navigate to player
+                Navigator.push(context, MaterialPageRoute(builder: (builder){
+                  return LocalAudioPlayerScreen(bookId: book['book_id']);
+                }));
               }
             },
             onLongPress: () {
@@ -785,20 +683,12 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
                           spacing: 12.w,
                           children: [
                             _buildSmallStat(Icons.storage_rounded, book['formatted_size']),
-                            _buildSmallStat(Icons.access_time_rounded, book['formatted_duration']),
                           ],
                         ),
                       ],
                     ),
                   ),
 
-                  if (!_isAudioSelectionMode)
-                    IconButton(
-                      onPressed: () => _deleteAudioBook(book),
-                      icon: Icon(Icons.delete_outline_rounded, color: Colors.red),
-                      padding: EdgeInsets.zero,
-                      constraints: BoxConstraints(),
-                    ),
                 ],
               ),
             ),
@@ -846,43 +736,6 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: Stack(
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl: book['cover_image'],
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(color: Colors.grey[300]),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[300],
-                          child: Icon(Icons.audiotrack_rounded, size: 40.sp),
-                        ),
-                      ),
-
-                      if (_isAudioSelectionMode)
-                        Positioned(
-                          top: 8.h,
-                          right: 8.w,
-                          child: Icon(
-                            isSelected ? Icons.check_circle : Icons.circle_outlined,
-                            color: isSelected ? AppColors.primary : Colors.white,
-                            size: 24.sp,
-                          ),
-                        )
-                      else
-                        Positioned(
-                          top: 8.h,
-                          right: 8.w,
-                          child: IconButton(
-                            icon: Icon(Icons.delete_outline, color: Colors.white),
-                            onPressed: () => _deleteAudioBook(book),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-
                 Padding(
                   padding: EdgeInsets.all(8.w),
                   child: Column(
@@ -944,53 +797,9 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
     );
   }
 
-  Widget _buildFavoritesTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.favorite_outline_rounded, size: 80.sp, color: Colors.grey.withOpacity(0.5)),
-          SizedBox(height: 16.h),
-          Text('Sevimlilar bo\'limi', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.w600)),
-          SizedBox(height: 8.h),
-          Text('Tez orada qo\'shiladi', style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
-        ],
-      ),
-    );
-  }
 
   // ==================== COMMON WIDGETS ====================
 
-  Widget _buildSearchBar({required String hint, required Function(String) onChanged}) {
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-      child: TextField(
-        controller: _searchController,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: AppColors.grey, fontSize: 14.sp),
-          prefixIcon: Icon(Icons.search_rounded, color: AppColors.grey, size: 22.sp),
-          suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(
-            icon: Icon(Icons.clear_rounded, color: AppColors.grey, size: 20.sp),
-            onPressed: () {
-              _searchController.clear();
-              onChanged('');
-            },
-          )
-              : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12.r),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
-        ),
-      ),
-    );
-  }
 
   Widget _buildSmallStat(IconData icon, String text) {
     return Row(
@@ -1014,36 +823,10 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              padding: EdgeInsets.all(32.w),
-              decoration: BoxDecoration(
-                color: (AppColors.primary ?? Colors.blue).withOpacity(0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, size: 80.sp, color: AppColors.primary ?? Colors.blue),
-            ),
-            SizedBox(height: 32.h),
             Text(
               title,
-              style: TextStyle(fontSize: 20.sp, fontWeight: FontWeight.w600,color: Colors.black),
+              style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.w600,color: Colors.black),
               textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 16.h),
-            Text(
-              subtitle,
-              style: TextStyle(fontSize: 14.sp, color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            SizedBox(height: 40.h),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.pop(context),
-              icon: Icon(Icons.explore_rounded),
-              label: Text('Kitoblarni ko\'rish'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary ?? Colors.blue,
-                padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 16.h),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-              ),
             ),
           ],
         ),
@@ -1072,22 +855,18 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28.sp),
             SizedBox(width: 8.w),
-            Expanded(child: Text('O\'chirish')),
+            Expanded(child: Text('O\'chirish',style: AppStyle.font800(AppColors.black),)),
           ],
         ),
-        content: Text('${book['title']} kitobini o\'chirmoqchimisiz?'),
+        content: Text('${book['title']} kitobini o\'chirmoqchimisiz?',style: AppStyle.font600(AppColors.grey),),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Bekor qilish'),
-          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
             ),
-            child: Text('O\'chirish'),
+            child: Text('O\'chirish',style: AppStyle.font800(AppColors.white),),
           ),
         ],
       ),
@@ -1201,7 +980,7 @@ class _MyDownloadsScreenState extends State<MyDownloadsScreen>
       leading: Container(
         padding: EdgeInsets.all(8.w),
         decoration: BoxDecoration(
-          color: isSelected ? (AppColors.primary ?? Colors.blue).withOpacity(0.1) : Colors.grey[100],
+          color: isSelected ? (AppColors.primary).withOpacity(0.1) : Colors.grey[100],
           borderRadius: BorderRadius.circular(8.r),
         ),
         child: Icon(icon, color: isSelected ? AppColors.primary : AppColors.grey, size: 24.sp),

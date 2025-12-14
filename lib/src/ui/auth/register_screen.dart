@@ -43,7 +43,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                     ),
                     SizedBox(height: 24.spMin,),
-                    Center(child: Text("Sahhof",style: AppStyle.heading1(AppColors.black),)),
+                    Center(child: Text("Buxoro sahiflari",style: AppStyle.heading1(AppColors.black),)),
                     SizedBox(height: 14.spMin,),
                     Center(
                       child: SizedBox(

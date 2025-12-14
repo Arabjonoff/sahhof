@@ -1,6 +1,6 @@
 import UIKit
 import Flutter
-import flutter_downloader   // 🔹 bu qatordagi import muhim
+import flutter_downloader
 
 @main
 @objc class AppDelegate: FlutterAppDelegate {
@@ -9,12 +9,20 @@ import flutter_downloader   // 🔹 bu qatordagi import muhim
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
 
-    // 🔹 flutter_downloader pluginini ro‘yxatdan o‘tkazish
+    GeneratedPluginRegistrant.register(with: self)
+
+    // flutter_downloader setup - KEYIN qo'yish kerak
     FlutterDownloaderPlugin.setPluginRegistrantCallback { registry in
-      GeneratedPluginRegistrant.register(with: registry)
+        if (!registry.hasPlugin("FlutterDownloaderPlugin")) {
+           GeneratedPluginRegistrant.register(with: registry)
+        }
     }
 
-    GeneratedPluginRegistrant.register(with: self)
+    // Background mode uchun
+    if #available(iOS 10.0, *) {
+      UNUserNotificationCenter.current().delegate = self as UNUserNotificationCenterDelegate
+    }
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 }

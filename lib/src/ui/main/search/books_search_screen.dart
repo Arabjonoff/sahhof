@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:sahhof/src/bloc/book/book_bloc.dart';
 import 'package:sahhof/src/model/book/book_model.dart';
+import 'package:sahhof/src/model/search/search_model.dart';
 import 'package:sahhof/src/theme/app_colors.dart';
 import 'package:sahhof/src/ui/main/detail/detail_screen.dart';
 import 'package:sahhof/src/widget/book_card_widget.dart';
@@ -17,7 +18,7 @@ class BooksSearchScreen extends StatefulWidget {
 class _BooksSearchScreenState extends State<BooksSearchScreen> {
   @override
   void initState() {
-    bookBloc.getBooks(2);
+    bookBloc.searchBooks('');
     super.initState();
   }
   @override
@@ -38,6 +39,7 @@ class _BooksSearchScreenState extends State<BooksSearchScreen> {
               borderRadius: BorderRadius.circular(12.r),
             ),
             child: TextField(
+              style: TextStyle(color: Colors.black),
               decoration: InputDecoration(
                 hintText: 'Kitoblar qidirish...',
                 hintStyle: TextStyle(
@@ -53,12 +55,12 @@ class _BooksSearchScreenState extends State<BooksSearchScreen> {
                 contentPadding: EdgeInsets.symmetric(vertical: 12.h),
               ),
               onChanged: (value) {
-                // Qidiruv logikasi
+                bookBloc.searchBooks(value);
               },
             ),
           ),
-          Expanded(child: StreamBuilder<List<BookResult>>(
-              stream: bookBloc.getBookStream,
+          Expanded(child: StreamBuilder<List<SearchResult>>(
+              stream: bookBloc.getSearchStream,
               builder: (context, snapshot) {
                 if(snapshot.hasData){
                   var data = snapshot.data!;
@@ -69,7 +71,7 @@ class _BooksSearchScreenState extends State<BooksSearchScreen> {
                       padding: EdgeInsets.only(left: 16.0.sp),
                       child: BookCardWidget(image: data[index].coverImage, onTap: () {
                         Navigator.push(context, MaterialPageRoute(builder: (context) => DetailScreen(id: data[index].id,)));
-                      }, title: data[index].title, author: data[index].author.fullName.toString(), description: data[index].description,),
+                      }, title: data[index].title, author: data[index].author.toString(), description: "", star: data[index].rating.toString(),),
                     );
                   });
                 }else{
@@ -79,7 +81,7 @@ class _BooksSearchScreenState extends State<BooksSearchScreen> {
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2,childAspectRatio: 0.55.sp,), itemBuilder: (ctx,index){
                       return Padding(
                         padding: EdgeInsets.only(left: 16.0.sp),
-                        child: BookCardWidget(image: '', onTap: () {  }, title: '', author: '', description: '',)
+                        child: BookCardWidget(image: '', onTap: () {}, title: '', author: '', description: '',star: '',)
                       );
                     }),
                   );

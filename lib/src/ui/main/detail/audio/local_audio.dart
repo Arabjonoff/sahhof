@@ -1,28 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:audio_service/audio_service.dart';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:sahhof/src/database/database_helper.dart';
@@ -30,9 +11,10 @@ import 'package:sahhof/src/model/audio/audio_model.dart';
 import 'package:sahhof/src/theme/app_colors.dart';
 import 'package:sahhof/src/theme/app_style.dart';
 import 'package:sahhof/src/ui/main/detail/audio/auido_dowload.dart';
+import 'package:sahhof/src/ui/main/detail/audio/audio_handler.dart';
 
 class LocalAudioPlayerScreen extends StatefulWidget {
-  final int bookId; // Database dan o'qish uchun
+  final int bookId;
 
   const LocalAudioPlayerScreen({
     Key? key,
@@ -46,11 +28,12 @@ class LocalAudioPlayerScreen extends StatefulWidget {
 class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
     with WidgetsBindingObserver {
 
-  // UNCOMMENT qiling
   final DatabaseHelper _dbHelper = DatabaseHelper();
   final AudioDownloadManager _downloadManager = AudioDownloadManager();
 
-  late AudioPlayer _audioPlayer;
+  AudioPlayer? _audioPlayer;
+  AudioPlayerHandler? _audioHandler;
+  bool _isInitialized = false;
 
   // Book data
   DownloadedBookModel? _bookData;
@@ -66,57 +49,97 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
   int _currentIndex = 0;
   LoopMode _loopMode = LoopMode.off;
 
+  // Position save timer
+  Timer? _positionSaveTimer;
+
+  // StreamSubscriptions
+  StreamSubscription? _durationSubscription;
+  StreamSubscription? _positionSubscription;
+  StreamSubscription? _playerStateSubscription;
+  StreamSubscription? _currentIndexSubscription;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _audioPlayer = AudioPlayer();
-    _loadLocalAudio();
+    _initAudioService();
+    _startAutoSaveTimer();
   }
 
   @override
   void dispose() {
+    _savePlaybackPosition();
+    _positionSaveTimer?.cancel();
+
     WidgetsBinding.instance.removeObserver(this);
-    _audioPlayer.dispose();
+    _durationSubscription?.cancel();
+    _positionSubscription?.cancel();
+    _playerStateSubscription?.cancel();
+    _currentIndexSubscription?.cancel();
+
+    if (_isInitialized && _audioHandler != null) {
+      _audioHandler!.customAction('dispose');
+    } else {
+      _audioPlayer?.dispose();
+    }
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      _audioPlayer.pause();
+      // Background ga ketganda pozitsiyani saqlash
+      _savePlaybackPosition();
+    }
+  }
+
+  // Auto save timer - har 10 sekundda
+  void _startAutoSaveTimer() {
+    _positionSaveTimer = Timer.periodic(Duration(seconds: 10), (timer) {
+      if (_isPlaying && _position.inSeconds > 0) {
+        _savePlaybackPosition();
+      }
+    });
+  }
+
+  Future<void> _initAudioService() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // Audio Service ni boshlash
+      try {
+        // Har doim oddiy audio player ishlatamiz, audio service kerak bo'lsa keyinroq qo'shamiz
+        _audioPlayer = AudioPlayer();
+        _isInitialized = false;
+
+        debugPrint('Using simple AudioPlayer (no background service)');
+      } catch (e) {
+        debugPrint('Audio service init error: $e');
+        _audioPlayer = AudioPlayer();
+        _isInitialized = false;
+      }
+
+      await _loadLocalAudio();
+    } catch (e) {
+      debugPrint('Init error: $e');
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _loadLocalAudio() async {
-    setState(() {
-      _isLoading = true;
-    });
-
     try {
-      // UNCOMMENT qiling - Database dan kitob ma'lumotlarini olish
+      // Database dan kitob ma'lumotlarini olish
       final book = await _dbHelper.getDownloadedBook(widget.bookId);
       final parts = await _dbHelper.getAudioParts(widget.bookId);
-
-      // Test uchun:
-      // final book = {
-      //   'id': 1,
-      //   'book_id': widget.bookId,
-      //   'title': 'Test Kitob',
-      //   'author_name': 'Test Muallif',
-      //   'cover_image': 'https://example.com/cover.jpg',
-      //   'audio_duration': 3600,
-      //   'total_size': 50000000,
-      //   'formatted_size': '50 MB',
-      //   'formatted_duration': '01:00:00',
-      // };
-      // final parts = <Map<String, dynamic>>[];
-
       if (book == null) {
         throw Exception('Kitob topilmadi');
       }
 
-      // UNCOMMENT qiling - Parts ni Map ga convert qilish
+      // Parts ni Map ga convert qilish
       final audioParts = parts.map((part) => {
         'id': part.id,
         'part_id': part.partId,
@@ -124,9 +147,6 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
         'path': part.path,
         'size': part.size,
       }).toList();
-
-      // final audioParts = parts; // Test uchun
-
       if (audioParts.isEmpty) {
         throw Exception('Audio fayllar topilmadi');
       }
@@ -139,7 +159,7 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
       await _initAudioPlayer();
 
     } catch (e) {
-      print('Error loading local audio: $e');
+      debugPrint('Error loading local audio: $e');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -147,7 +167,7 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
             content: Row(
               children: [
                 Icon(Icons.error_outline_rounded, color: Colors.white),
-                SizedBox(width: 8),
+                SizedBox(width: 8.w),
                 Expanded(child: Text('Xatolik: $e')),
               ],
             ),
@@ -156,7 +176,6 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
           ),
         );
 
-        // Go back if error
         Future.delayed(Duration(seconds: 2), () {
           if (mounted) Navigator.pop(context);
         });
@@ -169,16 +188,33 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
   }
 
   Future<void> _initAudioPlayer() async {
+    if (_audioPlayer == null || _bookData == null) {
+      debugPrint('Audio player or book data is null');
+      return;
+    }
+
     try {
-      // Local fayllarni tekshirish
       List<AudioSource> audioSources = [];
 
-      for (var part in _audioParts) {
+      debugPrint('========== CHECKING AUDIO FILES ==========');
+      debugPrint('Total parts: ${_audioParts.length}');
+
+      for (int i = 0; i < _audioParts.length; i++) {
+        final part = _audioParts[i];
         final filePath = part['path'] as String;
         final file = File(filePath);
 
+        debugPrint('--- Part ${i + 1} ---');
+        debugPrint('Name: ${part['name']}');
+        debugPrint('Path: $filePath');
+
         // Fayl mavjudligini tekshirish
-        if (await file.exists()) {
+        final exists = await file.exists();
+        debugPrint('File exists: $exists');
+
+        if (exists) {
+          final fileSize = await file.length();
+          debugPrint('File size: ${_formatBytes(fileSize)}');
           audioSources.add(
             AudioSource.file(
               filePath,
@@ -190,38 +226,137 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
             ),
           );
         } else {
-          print('File not found: $filePath');
+          debugPrint('⚠️ FILE NOT FOUND!');
+
+          // Directory ni ham tekshiramiz
+          final directory = file.parent;
+          final dirExists = await directory.exists();
+          debugPrint('Parent directory exists: $dirExists');
+
+          if (dirExists) {
+            debugPrint('Files in directory:');
+            try {
+              final files = directory.listSync();
+              for (var f in files) {
+                debugPrint('  - ${f.path}');
+              }
+            } catch (e) {
+              debugPrint('Cannot list directory: $e');
+            }
+          }
         }
       }
 
+      debugPrint('========================================');
+      debugPrint('Found ${audioSources.length} valid audio files');
+
       if (audioSources.isEmpty) {
-        throw Exception('Hech qanday audio fayl topilmadi');
+        throw Exception('Hech qanday audio fayl topilmadi.\n\nFayllar bazada saqlanganmi tekshiring.\n\nYuklab olish jarayonida xatolik bo\'lgan bo\'lishi mumkin.');
       }
 
-      // Playlist yaratish
+      // Oddiy playlist yaratish
       final playlist = ConcatenatingAudioSource(children: audioSources);
-
-      // Audio source ni set qilish
-      await _audioPlayer.setAudioSource(playlist);
+      await _audioPlayer!.setAudioSource(playlist);
 
       // Streams ni sozlash
       _setupAudioStreams();
 
-      // Last played position dan davom ettirish (agar mavjud bo'lsa)
+      // Oxirgi pozitsiyadan davom ettirish
       final lastPosition = _bookData!.lastPlayedPosition;
-      if (lastPosition > 0) {
-        await _audioPlayer.seek(Duration(seconds: lastPosition));
+      if (lastPosition > 5) {
+        await _audioPlayer!.seek(Duration(seconds: lastPosition));
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  Icon(Icons.history_rounded, color: Colors.white, size: 20.sp),
+                  SizedBox(width: 8.w),
+                  Expanded(
+                    child: Text(
+                      'Oxirgi joydan davom ettirilmoqda (${_formatDuration(Duration(seconds: lastPosition))})',
+                      style: TextStyle(fontSize: 13.sp),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: AppColors.primary,
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(seconds: 3),
+              action: SnackBarAction(
+                label: 'Boshidan',
+                textColor: Colors.white,
+                onPressed: () {
+                  _audioPlayer?.seek(Duration.zero, index: 0);
+                  _savePlaybackPosition();
+                },
+              ),
+            ),
+          );
+        }
       }
 
     } catch (e) {
-      print('Error initializing audio player: $e');
+      debugPrint('Error initializing audio player: $e');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Audio yuklashda xatolik: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+        // Show detailed error with action to re-download
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+            title: Row(
+              children: [
+                Icon(Icons.error_outline_rounded, color: Colors.red),
+                SizedBox(width: 8.w),
+                Expanded(child: Text('Xatolik', style: AppStyle.font600(Colors.red))),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Audio fayllar topilmadi.',
+                  style: AppStyle.font500(AppColors.black).copyWith(fontSize: 14.sp),
+                ),
+                SizedBox(height: 8.h),
+                Text(
+                  'Bu kitobni qaytadan yuklab olishingiz kerak.',
+                  style: AppStyle.font400(AppColors.grey).copyWith(fontSize: 13.sp),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.pop(context); // Close dialog
+                  Navigator.pop(context); // Go back
+                },
+                child: Text('Yopish'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(context); // Close dialog
+                  // Delete broken book
+                  await _downloadManager.deleteDownloadedBook(widget.bookId);
+                  Navigator.pop(context); // Go back
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Kitob o\'chirildi. Qaytadan yuklab oling.'),
+                      backgroundColor: AppColors.primary,
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
+                ),
+                child: Text('O\'chirib, qayta yuklash', style: AppStyle.font500(Colors.white)),
+              ),
+            ],
           ),
         );
       }
@@ -229,8 +364,10 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
   }
 
   void _setupAudioStreams() {
+    if (_audioPlayer == null) return;
+
     // Duration stream
-    _audioPlayer.durationStream.listen((duration) {
+    _durationSubscription = _audioPlayer!.durationStream.listen((duration) {
       if (mounted) {
         setState(() {
           _duration = duration ?? Duration.zero;
@@ -239,21 +376,16 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
     });
 
     // Position stream
-    _audioPlayer.positionStream.listen((position) {
+    _positionSubscription = _audioPlayer!.positionStream.listen((position) {
       if (!_isDragging && mounted) {
         setState(() {
           _position = position;
         });
-
-        // Har 30 sekundda position ni saqlash
-        if (position.inSeconds % 30 == 0) {
-          _savePlaybackPosition();
-        }
       }
     });
 
     // Player state stream
-    _audioPlayer.playerStateStream.listen((state) {
+    _playerStateSubscription = _audioPlayer!.playerStateStream.listen((state) {
       if (mounted) {
         setState(() {
           _isPlaying = state.playing;
@@ -261,43 +393,70 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
               state.processingState == ProcessingState.buffering;
         });
 
+        // Pause bo'lganda pozitsiyani saqlash
+        if (!state.playing && _position.inSeconds > 0) {
+          _savePlaybackPosition();
+        }
+
         // Audio tugaganda
         if (state.processingState == ProcessingState.completed) {
-          _skipToNext();
+          if (_audioPlayer?.hasNext == false) {
+            _savePlaybackPosition();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      Icon(Icons.check_circle_rounded, color: Colors.white),
+                      SizedBox(width: 8.w),
+                      Text('Kitob tugadi!'),
+                    ],
+                  ),
+                  backgroundColor: Colors.green,
+                  behavior: SnackBarBehavior.floating,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+          } else {
+            _skipToNext();
+          }
         }
       }
     });
 
     // Current index stream
-    _audioPlayer.currentIndexStream.listen((index) {
+    _currentIndexSubscription = _audioPlayer!.currentIndexStream.listen((index) {
       if (mounted && index != null) {
         setState(() {
           _currentIndex = index;
         });
+        _savePlaybackPosition();
       }
     });
   }
 
   Future<void> _savePlaybackPosition() async {
-    if (_bookData == null) return;
+    if (_bookData == null || _audioPlayer == null) return;
 
     try {
-      // UNCOMMENT qiling
       await _dbHelper.updateLastPlayedPosition(
         widget.bookId,
         _position.inSeconds,
       );
     } catch (e) {
-      print('Error saving playback position: $e');
+      debugPrint('Error saving playback position: $e');
     }
   }
 
   void _togglePlayPause() async {
+    if (_audioPlayer == null) return;
+
     try {
       if (_isPlaying) {
-        await _audioPlayer.pause();
+        await _audioPlayer!.pause();
       } else {
-        await _audioPlayer.play();
+        await _audioPlayer!.play();
       }
     } catch (e) {
       if (mounted) {
@@ -309,48 +468,62 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
   }
 
   void _seekToPosition(double value) {
+    if (_audioPlayer == null) return;
     final position = Duration(seconds: value.toInt());
-    _audioPlayer.seek(position);
+    _audioPlayer!.seek(position);
+    Future.delayed(Duration(milliseconds: 500), () {
+      _savePlaybackPosition();
+    });
   }
 
   void _changeSpeed(double speed) {
+    if (_audioPlayer == null) return;
     setState(() {
       _playbackSpeed = speed;
     });
-    _audioPlayer.setSpeed(speed);
+    _audioPlayer!.setSpeed(speed);
   }
 
   void _skipForward() {
+    if (_audioPlayer == null) return;
     final newPosition = _position + Duration(seconds: 10);
     if (newPosition < _duration) {
-      _audioPlayer.seek(newPosition);
+      _audioPlayer!.seek(newPosition);
     } else {
-      _audioPlayer.seek(_duration);
+      _audioPlayer!.seek(_duration);
     }
+    _savePlaybackPosition();
   }
 
   void _skipBackward() {
+    if (_audioPlayer == null) return;
     final newPosition = _position - Duration(seconds: 10);
     if (newPosition > Duration.zero) {
-      _audioPlayer.seek(newPosition);
+      _audioPlayer!.seek(newPosition);
     } else {
-      _audioPlayer.seek(Duration.zero);
+      _audioPlayer!.seek(Duration.zero);
     }
+    _savePlaybackPosition();
   }
 
   void _skipToNext() {
-    if (_audioPlayer.hasNext) {
-      _audioPlayer.seekToNext();
+    if (_audioPlayer == null) return;
+    if (_audioPlayer!.hasNext) {
+      _audioPlayer!.seekToNext();
+      _savePlaybackPosition();
     }
   }
 
   void _skipToPrevious() {
-    if (_audioPlayer.hasPrevious) {
-      _audioPlayer.seekToPrevious();
+    if (_audioPlayer == null) return;
+    if (_audioPlayer!.hasPrevious) {
+      _audioPlayer!.seekToPrevious();
+      _savePlaybackPosition();
     }
   }
 
   void _toggleLoopMode() {
+    if (_audioPlayer == null) return;
     setState(() {
       switch (_loopMode) {
         case LoopMode.off:
@@ -364,7 +537,7 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
           break;
       }
     });
-    _audioPlayer.setLoopMode(_loopMode);
+    _audioPlayer!.setLoopMode(_loopMode);
   }
 
   String _formatDuration(Duration duration) {
@@ -384,16 +557,16 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
   Widget build(BuildContext context) {
     if (_isLoading) {
       return Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: AppColors.background,
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              CircularProgressIndicator(color: Colors.blue),
-              SizedBox(height: 20.sp),
+              CircularProgressIndicator(color: AppColors.primary),
+              SizedBox(height: 20.h),
               Text(
                 'Yuklanmoqda...',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                style: AppStyle.font500(AppColors.black).copyWith(fontSize: 16.sp),
               ),
             ],
           ),
@@ -403,20 +576,20 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
 
     if (_bookData == null) {
       return Scaffold(
-        backgroundColor: Colors.grey[50],
+        backgroundColor: AppColors.background,
         appBar: AppBar(
-          backgroundColor: Colors.blue,
-          title: Text('Local Audio Player'),
+          backgroundColor: AppColors.white,
+          title: Text('Yuklab olingan audio'),
         ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline_rounded, size: 80, color: Colors.red),
-              SizedBox(height: 20.sp),
+              Icon(Icons.error_outline_rounded, size: 80.sp, color: Colors.red),
+              SizedBox(height: 20.h),
               Text(
                 'Kitob topilmadi',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: AppStyle.font600(AppColors.black).copyWith(fontSize: 18.sp),
               ),
             ],
           ),
@@ -425,29 +598,25 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
     }
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.blue,
+        backgroundColor: AppColors.white,
         elevation: 0,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _bookData!.title,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+        centerTitle: true,
+        title: Text(
+          _bookData!.title,
+          style: AppStyle.font600(Colors.black).copyWith(fontSize: 16.sp),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           IconButton(
             onPressed: _showPlaylistDialog,
-            icon: Icon(Icons.queue_music_rounded, color: Colors.white),
+            icon: Icon(Icons.queue_music_rounded, color: Colors.black),
             tooltip: 'Playlist',
           ),
           PopupMenuButton<String>(
-            icon: Icon(Icons.more_vert_rounded, color: Colors.white),
+            icon: Icon(Icons.more_vert_rounded, color: Colors.black),
             onSelected: (value) {
               switch (value) {
                 case 'info':
@@ -463,8 +632,8 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
                 value: 'info',
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline_rounded, size: 20),
-                    SizedBox(width: 12),
+                    Icon(Icons.info_outline_rounded, size: 20.sp),
+                    SizedBox(width: 12.w),
                     Text('Ma\'lumot'),
                   ],
                 ),
@@ -473,8 +642,8 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
                 value: 'delete',
                 child: Row(
                   children: [
-                    Icon(Icons.delete_outline_rounded, size: 20, color: Colors.red),
-                    SizedBox(width: 12),
+                    Icon(Icons.delete_outline_rounded, size: 20.sp, color: Colors.red),
+                    SizedBox(width: 12.w),
                     Text('O\'chirish', style: TextStyle(color: Colors.red)),
                   ],
                 ),
@@ -483,342 +652,307 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Header with gradient
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.blue,
-                  Colors.blue.withOpacity(0.1),
-                ],
-              ),
-            ),
-            padding: EdgeInsets.fromLTRB(24, 20, 24, 40),
-            child: Column(
-              children: [
-                // Cover image
-                Hero(
-                  tag: 'book_cover_${widget.bookId}',
-                  child: Container(
-                    width: 200,
-                    height: 250.sp,
-                    decoration: BoxDecoration(
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.blue.withOpacity(0.3),
-                          spreadRadius: 8,
-                          blurRadius: 20,
-                          offset: Offset(0, 8),
-                        ),
-                      ],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: CachedNetworkImage(
-                        imageUrl: _bookData!.coverImage,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          color: Colors.grey[300],
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          color: Colors.grey[300],
-                          child: Icon(Icons.audiotrack_rounded, size: 60, color: Colors.grey),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                SizedBox(height: 24.sp),
-
-                // Title
-                Text(
-                  _bookData!.title,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-
-                SizedBox(height: 8),
-
-                // Author
-                Text(
-                  _bookData!.authorName,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey[600],
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
-                SizedBox(height: 16.sp),
-
-                // Current track info
-                Container(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.audiotrack_rounded, size: 16, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text(
-                        'Qism ${_currentIndex + 1}/${_audioParts.length}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Player controls
-          Expanded(
-            child: Container(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Progress bar
-                  Column(
-                    children: [
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight: 4.sp,
-                          thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),
-                          overlayShape: RoundSliderOverlayShape(overlayRadius: 14),
-                          activeTrackColor: Colors.blue,
-                          inactiveTrackColor: Colors.grey[300],
-                          thumbColor: Colors.blue,
-                          overlayColor: Colors.blue.withOpacity(0.2),
-                        ),
-                        child: Slider(
-                          value: _position.inSeconds.toDouble(),
-                          min: 0,
-                          max: _duration.inSeconds.toDouble(),
-                          onChanged: (value) {
-                            setState(() {
-                              _isDragging = true;
-                            });
-                          },
-                          onChangeEnd: (value) {
-                            _seekToPosition(value);
-                            setState(() {
-                              _isDragging = false;
-                            });
-                          },
-                        ),
-                      ),
-
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 8),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _formatDuration(_position),
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                            ),
-                            Text(
-                              _formatDuration(_duration),
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  SizedBox(height: 40.sp),
-
-                  // Main controls
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Previous
-                      IconButton(
-                        onPressed: _audioParts.length > 1 ? _skipToPrevious : null,
-                        icon: Icon(Icons.skip_previous_rounded),
-                        iconSize: 40,
-                        color: Colors.grey[700],
-                      ),
-
-                      // Backward 10s
-                      IconButton(
-                        onPressed: _skipBackward,
-                        icon: Icon(Icons.replay_10_rounded),
-                        iconSize: 36,
-                        color: Colors.grey[700],
-                      ),
-
-                      // Play/Pause
-                      Container(
-                        width: 70,
-                        height: 70.sp,
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.blue.withOpacity(0.3),
-                              blurRadius: 12,
-                              offset: Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          onPressed: _togglePlayPause,
-                          icon: Icon(
-                            _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                            color: Colors.white,
-                          ),
-                          iconSize: 36,
-                        ),
-                      ),
-
-                      // Forward 10s
-                      IconButton(
-                        onPressed: _skipForward,
-                        icon: Icon(Icons.forward_10_rounded),
-                        iconSize: 36,
-                        color: Colors.grey[700],
-                      ),
-
-                      // Next
-                      IconButton(
-                        onPressed: _audioParts.length > 1 ? _skipToNext : null,
-                        icon: Icon(Icons.skip_next_rounded),
-                        iconSize: 40,
-                        color: Colors.grey[700],
-                      ),
-                    ],
-                  ),
-
-
-                  // Secondary controls
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      // Speed
-                      _buildControlButton(
-                        icon: Icons.speed_rounded,
-                        label: '${_playbackSpeed}x',
-                        onPressed: _showSpeedDialog,
-                      ),
-
-                      // Loop mode
-                      _buildControlButton(
-                        icon: _loopMode == LoopMode.off
-                            ? Icons.repeat_rounded
-                            : _loopMode == LoopMode.one
-                            ? Icons.repeat_one_rounded
-                            : Icons.repeat_on_rounded,
-                        label: _loopMode == LoopMode.off
-                            ? 'O\'chiriq'
-                            : _loopMode == LoopMode.one
-                            ? 'Bitta'
-                            : 'Hammasi',
-                        onPressed: _toggleLoopMode,
-                        isActive: _loopMode != LoopMode.off,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildControlButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onPressed,
-    bool isActive = false,
-  }) {
-    return InkWell(
-      onTap: onPressed,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        decoration: BoxDecoration(
-          color: isActive ? Colors.blue.withOpacity(0.1) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isActive ? Colors.blue : Colors.transparent,
-            width: 2,
-          ),
-        ),
+      body: SafeArea(
         child: Column(
           children: [
-            Icon(
-              icon,
-              color: isActive ? Colors.blue : Colors.grey[700],
-              size: 24,
-            ),
-            SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: isActive ? Colors.blue : Colors.grey[700],
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+            SizedBox(height: 20.h),
+
+            // Cover image
+            Hero(
+              tag: 'local_book_cover_${widget.bookId}',
+              child: Container(
+                width: 200.w,
+                height: 260.h,
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.2),
+                      spreadRadius: 8,
+                      blurRadius: 20,
+                      offset: Offset(0, 8),
+                    ),
+                  ],
+                  borderRadius: BorderRadius.circular(12.r),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12.r),
+                  child: CachedNetworkImage(
+                    imageUrl: _bookData!.coverImage,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: AppColors.grey.withOpacity(0.2),
+                      child: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: AppColors.grey.withOpacity(0.2),
+                      child: Icon(Icons.audiotrack_rounded, size: 60.sp, color: AppColors.grey),
+                    ),
+                  ),
+                ),
               ),
             ),
+
+            SizedBox(height: 24.h),
+
+            // Title
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20.w),
+              child: Text(
+                _getCurrentPartName(),
+                style: AppStyle.font600(AppColors.black).copyWith(fontSize: 18.sp),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+            SizedBox(height: 8.h),
+
+            // Author
+            Text(
+              _bookData!.authorName,
+              style: AppStyle.font400(AppColors.grey).copyWith(fontSize: 14.sp),
+            ),
+
+            SizedBox(height: 16.h),
+
+            // Current part info
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20.r),
+              ),
+              child: Text(
+                'Qism ${_currentIndex + 1}/${_audioParts.length}',
+                style: AppStyle.font500(AppColors.primary).copyWith(fontSize: 14.sp),
+              ),
+            ),
+
+            Spacer(),
+
+            // Progress slider
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20.w),
+              child: Column(
+                children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: AppColors.primary,
+                      inactiveTrackColor: AppColors.grey.withOpacity(0.3),
+                      thumbColor: AppColors.primary,
+                      overlayColor: AppColors.primary.withOpacity(0.2),
+                      thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6.r),
+                      trackHeight: 3.h,
+                    ),
+                    child: Slider(
+                      value: _duration.inSeconds > 0
+                          ? _position.inSeconds.toDouble().clamp(0.0, _duration.inSeconds.toDouble())
+                          : 0.0,
+                      max: _duration.inSeconds > 0 ? _duration.inSeconds.toDouble() : 1.0,
+                      onChangeStart: (value) {
+                        setState(() {
+                          _isDragging = true;
+                        });
+                      },
+                      onChanged: (value) {
+                        setState(() {
+                          _position = Duration(seconds: value.toInt());
+                        });
+                      },
+                      onChangeEnd: (value) {
+                        _seekToPosition(value);
+                        setState(() {
+                          _isDragging = false;
+                        });
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20.w),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDuration(_position),
+                          style: AppStyle.font400(AppColors.grey).copyWith(fontSize: 12.sp),
+                        ),
+                        Text(
+                          _formatDuration(_duration),
+                          style: AppStyle.font400(AppColors.grey).copyWith(fontSize: 12.sp),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 30.h),
+
+            // Control buttons
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20.w),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Previous
+                  IconButton(
+                    onPressed: (_audioPlayer?.hasPrevious ?? false) ? _skipToPrevious : null,
+                    icon: Icon(
+                      Icons.skip_previous_rounded,
+                      color: (_audioPlayer?.hasPrevious ?? false) ? AppColors.black : AppColors.grey,
+                      size: 36.sp,
+                    ),
+                  ),
+
+                  // Backward 10s
+                  IconButton(
+                    onPressed: _audioPlayer != null ? _skipBackward : null,
+                    icon: Icon(
+                      Icons.replay_10_rounded,
+                      color: _audioPlayer != null ? AppColors.black : AppColors.grey,
+                      size: 32.sp,
+                    ),
+                  ),
+
+                  // Play/Pause
+                  _isLoading
+                      ? SizedBox(
+                    width: 64.sp,
+                    height: 64.sp,
+                    child: CircularProgressIndicator(
+                      color: AppColors.primary,
+                      strokeWidth: 3,
+                    ),
+                  )
+                      : GestureDetector(
+                    onTap: _audioPlayer != null ? _togglePlayPause : null,
+                    child: Container(
+                      width: 64.sp,
+                      height: 64.sp,
+                      decoration: BoxDecoration(
+                        color: _audioPlayer != null ? AppColors.primary : AppColors.grey,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: (_audioPlayer != null ? AppColors.primary : AppColors.grey).withOpacity(0.3),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 36.sp,
+                      ),
+                    ),
+                  ),
+
+                  // Forward 10s
+                  IconButton(
+                    onPressed: _audioPlayer != null ? _skipForward : null,
+                    icon: Icon(
+                      Icons.forward_10_rounded,
+                      color: _audioPlayer != null ? AppColors.black : AppColors.grey,
+                      size: 32.sp,
+                    ),
+                  ),
+
+                  // Next
+                  IconButton(
+                    onPressed: (_audioPlayer?.hasNext ?? false) ? _skipToNext : null,
+                    icon: Icon(
+                      Icons.skip_next_rounded,
+                      color: (_audioPlayer?.hasNext ?? false) ? AppColors.black : AppColors.grey,
+                      size: 36.sp,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            SizedBox(height: 20.h),
+
+            // Secondary controls
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40.w),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Speed
+                  IconButton(
+                    onPressed: _showSpeedDialog,
+                    icon: Row(
+                      children: [
+                        Icon(Icons.speed_rounded, color: AppColors.grey, size: 24.sp),
+                        SizedBox(width: 4.w),
+                        Text(
+                          '${_playbackSpeed}x',
+                          style: AppStyle.font500(AppColors.grey).copyWith(fontSize: 12.sp),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Loop mode
+                  IconButton(
+                    onPressed: _toggleLoopMode,
+                    icon: Icon(
+                      _loopMode == LoopMode.off
+                          ? Icons.repeat_rounded
+                          : _loopMode == LoopMode.one
+                          ? Icons.repeat_one_rounded
+                          : Icons.repeat_on_rounded,
+                      color: _loopMode == LoopMode.off ? AppColors.grey : AppColors.primary,
+                      size: 24.sp,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Spacer(),
           ],
         ),
       ),
     );
   }
 
+  String _getCurrentPartName() {
+    if (_currentIndex >= 0 && _currentIndex < _audioParts.length) {
+      return _audioParts[_currentIndex]['name'];
+    }
+    return _bookData?.title ?? '';
+  }
+
   void _showSpeedDialog() {
     showModalBottomSheet(
       context: context,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
       ),
       builder: (context) => Container(
-        padding: EdgeInsets.all(20),
+        padding: EdgeInsets.all(20.w),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.speed_rounded, color: Colors.blue),
-                SizedBox(width: 12),
+                Icon(Icons.speed_rounded, color: AppColors.primary),
+                SizedBox(width: 12.w),
                 Text(
-                  'Tezlikni tanlang',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600,color: AppColors.black),
+                  'Ijro tezligi',
+                  style: AppStyle.font600(AppColors.black).copyWith(fontSize: 18.sp),
                 ),
               ],
             ),
-            SizedBox(height: 20.sp),
+            SizedBox(height: 20.h),
             Wrap(
-              spacing: 12,
-              runSpacing: 12,
+              spacing: 12.w,
+              runSpacing: 12.h,
               children: [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0].map((speed) {
                 final isSelected = _playbackSpeed == speed;
                 return InkWell(
@@ -827,13 +961,13 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
                     Navigator.pop(context);
                   },
                   child: Container(
-                    width: 80,
-                    padding: EdgeInsets.symmetric(vertical: 12),
+                    width: 80.w,
+                    padding: EdgeInsets.symmetric(vertical: 12.h),
                     decoration: BoxDecoration(
-                      color: isSelected ? Colors.blue : Colors.grey[100],
-                      borderRadius: BorderRadius.circular(12),
+                      color: isSelected ? AppColors.primary : AppColors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12.r),
                       border: Border.all(
-                        color: isSelected ? Colors.blue : Colors.grey[300]!,
+                        color: isSelected ? AppColors.primary : AppColors.grey.withOpacity(0.3),
                         width: 2,
                       ),
                     ),
@@ -841,16 +975,16 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
                       '${speed}x',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: 16.sp,
                         fontWeight: FontWeight.w600,
-                        color: isSelected ? Colors.white : Colors.black,
+                        color: isSelected ? Colors.white : AppColors.black,
                       ),
                     ),
                   ),
                 );
               }).toList(),
             ),
-            SizedBox(height: 10.sp),
+            SizedBox(height: 10.h),
           ],
         ),
       ),
@@ -862,7 +996,7 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
       context: context,
       isScrollControlled: true,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
       ),
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.6,
@@ -870,32 +1004,32 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
         maxChildSize: 0.9,
         expand: false,
         builder: (context, scrollController) => Container(
-          padding: EdgeInsets.all(20),
+          padding: EdgeInsets.all(20.w),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Center(
                 child: Container(
-                  width: 40,
-                  height: 4.sp,
+                  width: 40.w,
+                  height: 4.h,
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
+                    color: AppColors.grey.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2.r),
                   ),
                 ),
               ),
-              SizedBox(height: 20.sp),
+              SizedBox(height: 20.h),
               Row(
                 children: [
-                  Icon(Icons.queue_music_rounded, color: Colors.blue),
-                  SizedBox(width: 12),
+                  Icon(Icons.queue_music_rounded, color: AppColors.primary),
+                  SizedBox(width: 12.w),
                   Text(
-                    'Playlist (${_audioParts.length} ta)',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600,color: AppColors.black),
+                    'Bo\'limlar (${_audioParts.length} ta)',
+                    style: AppStyle.font600(AppColors.black).copyWith(fontSize: 18.sp),
                   ),
                 ],
               ),
-              SizedBox(height: 20.sp),
+              SizedBox(height: 20.h),
               Expanded(
                 child: ListView.builder(
                   controller: scrollController,
@@ -905,42 +1039,41 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
                     final isPlaying = _currentIndex == index;
 
                     return Card(
-                      color: isPlaying ? Colors.blue.withOpacity(0.1) : null,
+                      color: isPlaying ? AppColors.primary.withOpacity(0.1) : null,
                       child: ListTile(
                         leading: Container(
-                          width: 40,
-                          height: 40.sp,
+                          width: 40.w,
+                          height: 40.h,
                           decoration: BoxDecoration(
-                            color: isPlaying ? Colors.blue : Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
+                            color: isPlaying ? AppColors.primary : AppColors.grey.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(8.r),
                           ),
                           child: Center(
                             child: isPlaying
-                                ? Icon(Icons.play_arrow_rounded, color: Colors.white)
+                                ? Icon(Icons.graphic_eq_rounded, color: Colors.white)
                                 : Text(
                               '${index + 1}',
-                              style: TextStyle(fontWeight: FontWeight.w600),
+                              style: AppStyle.font600(AppColors.grey),
                             ),
                           ),
                         ),
                         title: Text(
                           part['name'],
-                          style: TextStyle(
-                            fontWeight: isPlaying ? FontWeight.w600 : FontWeight.w500,
-                            color: isPlaying ? Colors.blue : Colors.black,
+                          style: AppStyle.font400(
+                            isPlaying ? AppColors.primary : AppColors.black,
                           ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Text(
                           _formatBytes(part['size'] ?? 0),
-                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                          style: TextStyle(fontSize: 12.sp, color: AppColors.grey),
                         ),
                         trailing: isPlaying
-                            ? Icon(Icons.equalizer_rounded, color: Colors.blue)
+                            ? Icon(Icons.play_arrow_rounded, color: AppColors.primary)
                             : null,
                         onTap: () {
-                          _audioPlayer.seek(Duration.zero, index: index);
+                          _audioPlayer?.seek(Duration.zero, index: index);
                           Navigator.pop(context);
                         },
                       ),
@@ -959,34 +1092,32 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
     showModalBottomSheet(
       context: context,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20.r)),
       ),
       builder: (context) => Container(
-        padding: EdgeInsets.all(24),
+        padding: EdgeInsets.all(24.w),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.info_outline_rounded, color: Colors.blue),
-                SizedBox(width: 12),
+                Icon(Icons.info_outline_rounded, color: AppColors.primary),
+                SizedBox(width: 12.w),
                 Text(
                   'Kitob haqida',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  style: AppStyle.font600(AppColors.black).copyWith(fontSize: 18.sp),
                 ),
               ],
             ),
-            SizedBox(height: 24.sp),
+            SizedBox(height: 24.h),
             _buildInfoRow(Icons.book_rounded, 'Nomi', _bookData!.title),
-            SizedBox(height: 16.sp),
+            SizedBox(height: 16.h),
             _buildInfoRow(Icons.person_rounded, 'Muallif', _bookData!.authorName),
-            SizedBox(height: 16.sp),
+            SizedBox(height: 16.h),
             _buildInfoRow(Icons.audiotrack_rounded, 'Qismlar', '${_audioParts.length} ta'),
-            SizedBox(height: 16.sp),
+            SizedBox(height: 16.h),
             _buildInfoRow(Icons.storage_rounded, 'Hajmi', _bookData!.formattedSize),
-            SizedBox(height: 16.sp),
-            _buildInfoRow(Icons.timer_rounded, 'Davomiyligi', _bookData!.formattedDuration),
           ],
         ),
       ),
@@ -996,16 +1127,16 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
   Widget _buildInfoRow(IconData icon, String label, String value) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: Colors.blue),
-        SizedBox(width: 12),
+        Icon(icon, size: 20.sp, color: AppColors.primary),
+        SizedBox(width: 12.w),
         Text(
           '$label: ',
-          style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+          style: AppStyle.font400(AppColors.grey).copyWith(fontSize: 14.sp),
         ),
         Expanded(
           child: Text(
             value,
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            style: AppStyle.font600(AppColors.black).copyWith(fontSize: 14.sp),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -1017,17 +1148,17 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
         title: Row(
           children: [
             Icon(Icons.warning_amber_rounded, color: Colors.orange),
-            SizedBox(width: 8),
-            Expanded(child: Text('O\'chirish',style: AppStyle.font600(Colors.orange),)),
+            SizedBox(width: 8.w),
+            Expanded(child: Text('O\'chirish', style: AppStyle.font600(Colors.orange))),
           ],
         ),
         content: Text(
           'Kitobni va barcha audio fayllarni o\'chirmoqchimisiz?',
-          style: TextStyle(fontSize: 14,color: AppColors.grey),
+          style: AppStyle.font400(AppColors.grey).copyWith(fontSize: 14.sp),
         ),
         actions: [
           TextButton(
@@ -1038,9 +1169,9 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8.r)),
             ),
-            child: Text('O\'chirish',style: AppStyle.font500(AppColors.white),),
+            child: Text('O\'chirish', style: AppStyle.font500(AppColors.white)),
           ),
         ],
       ),
@@ -1052,25 +1183,19 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
   }
 
   Future<void> _deleteBook() async {
-    // Save current position before deleting
     await _savePlaybackPosition();
+    await _audioPlayer?.pause();
 
-    // Pause player
-    await _audioPlayer.pause();
-
-    // Show loading
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => Center(
-        child: CircularProgressIndicator(color: Colors.blue),
+        child: CircularProgressIndicator(color: AppColors.primary),
       ),
     );
 
     try {
-      // UNCOMMENT qiling
       final success = await _downloadManager.deleteDownloadedBook(widget.bookId);
-      // final success = true; // Test uchun
 
       Navigator.pop(context); // Close loading
 
@@ -1081,7 +1206,7 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
               content: Row(
                 children: [
                   Icon(Icons.check_circle_rounded, color: Colors.white),
-                  SizedBox(width: 8),
+                  SizedBox(width: 8.w),
                   Text('Kitob o\'chirildi'),
                 ],
               ),
@@ -1090,7 +1215,6 @@ class _LocalAudioPlayerScreenState extends State<LocalAudioPlayerScreen>
             ),
           );
 
-          // Go back
           Navigator.pop(context);
         }
       } else {

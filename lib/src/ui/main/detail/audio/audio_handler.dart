@@ -1,186 +1,316 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
 
-class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
-  final AudioPlayer _player = AudioPlayer();
+class AudioPlayerHandler extends BaseAudioHandler {
+  final AudioPlayer player = AudioPlayer();
+
+  // Playlist holati
+  bool _isPlaylistLoaded = false;
 
   AudioPlayerHandler() {
-    _notifyAudioHandlerAboutPlaybackEvents();
-    _listenForDurationChanges();
-    _listenForCurrentSongIndexChanges();
-    _listenForSequenceStateChanges();
+    // Player state changes ni AudioService ga ulash
+    player.playbackEventStream.map(_transformEvent).pipe(playbackState);
+
+    // Current item changes
+    player.currentIndexStream.listen((index) {
+      if (index != null && queue.value.isNotEmpty && index < queue.value.length) {
+        mediaItem.add(queue.value[index]);
+      }
+    });
+
+    // Player errors ni handle qilish
+    player.playerStateStream.listen((state) {
+      if (state.processingState == ProcessingState.idle && !state.playing) {
+        print('⚠️ Player idle state');
+      }
+    });
   }
 
+  // ✅ Playlist ni yuklash (AudioScreen dan chaqiriladi)
   Future<void> initPlaylist(List<MediaItem> items) async {
-    // Set initial queue
-    queue.add(items);
-
-    final audioSource = ConcatenatingAudioSource(
-      children: items.map((item) => AudioSource.uri(
-        Uri.parse(item.id),
-        tag: item,
-      )).toList(),
-    );
-
     try {
-      await _player.setAudioSource(audioSource);
-    } catch (e) {
-      print("Error loading playlist: $e");
+      print('🔵 Starting initPlaylist with ${items.length} items');
+
+      // ✅ 1. Items validatsiyasi
+      if (items.isEmpty) {
+        throw Exception('MediaItem list bo\'sh!');
+      }
+
+      // ✅ 2. Har bir item URLni tekshirish
+      final validItems = <MediaItem>[];
+      for (var item in items) {
+        if (item.id.isEmpty) {
+          print('⚠️ Bo\'sh URL topildi, o\'tkazib yuboriladi: ${item.title}');
+          continue;
+        }
+
+        // URL formatini tekshirish
+        if (!item.id.startsWith('http://') &&
+            !item.id.startsWith('https://') &&
+            !item.id.startsWith('file://')) {
+          print('⚠️ Noto\'g\'ri URL format: ${item.id}');
+          continue;
+        }
+
+        print('✅ Valid URL: ${item.id}');
+        validItems.add(item);
+      }
+
+      if (validItems.isEmpty) {
+        throw Exception('Hech qanday valid audio URL topilmadi!');
+      }
+
+      print('✅ ${validItems.length} ta valid MediaItem topildi');
+
+      // ✅ 3. Queue ni yangilash
+      queue.add(validItems);
+
+      // ✅ 4. Eski audio ni to'xtatish
+      if (_isPlaylistLoaded) {
+        print('⏸️ Eski playlistni to\'xtatish...');
+        try {
+          await player.stop();
+          await Future.delayed(Duration(milliseconds: 200));
+        } catch (e) {
+          print('⚠️ Stop error (ignored): $e');
+        }
+      }
+
+      // ✅ 5. Audio sources yaratish
+      print('🔵 Audio sources yaratmoqda...');
+      final audioSources = <AudioSource>[];
+
+      for (var item in validItems) {
+        try {
+          final source = AudioSource.uri(
+            Uri.parse(item.id),
+            tag: item,
+          );
+          audioSources.add(source);
+          print('✅ Audio source yaratildi: ${item.title}');
+        } catch (e) {
+          print('❌ Audio source yaratishda xatolik: ${item.id} - $e');
+        }
+      }
+
+      if (audioSources.isEmpty) {
+        throw Exception('Hech qanday audio source yaratilmadi!');
+      }
+
+      // ✅ 6. Playlist yaratish va yuklash
+      print('🔵 Playlist yaratmoqda va yuklanmoqda...');
+
+      try {
+        final playlist = ConcatenatingAudioSource(
+          useLazyPreparation: true,
+          shuffleOrder: DefaultShuffleOrder(),
+          children: audioSources,
+        );
+
+        await player.setAudioSource(
+          playlist,
+          initialIndex: 0,
+          initialPosition: Duration.zero,
+        );
+
+        print('✅ Playlist muvaffaqiyatli yuklandi: ${audioSources.length} ta audio');
+      } catch (e, stackTrace) {
+        print('❌ Playlist yuklashda xatolik: $e');
+        print('StackTrace: $stackTrace');
+
+        // Xatolik haqida batafsil ma'lumot
+        if (e.toString().contains('Unable to connect')) {
+          print('❌ Internet ulanishi yo\'q yoki server javob bermayapti');
+        } else if (e.toString().contains('404')) {
+          print('❌ Audio fayl topilmadi (404)');
+        } else if (e.toString().contains('403')) {
+          print('❌ Audio faylga kirish taqiqlangan (403)');
+        }
+
+        throw Exception('Audio yuklashda xatolik: $e');
+      }
+
+      // ✅ 7. Birinchi itemni set qilish
+      if (validItems.isNotEmpty) {
+        mediaItem.add(validItems[0]);
+      }
+
+      _isPlaylistLoaded = true;
+
+      print('✅ initPlaylist tugadi, jami ${validItems.length} ta audio');
+
+    } catch (e, stackTrace) {
+      print('❌ initPlaylist da xatolik: $e');
+      print('StackTrace: $stackTrace');
+
+      // ✅ Xatolik holatini tozalash
+      _isPlaylistLoaded = false;
+      queue.add([]);
+
+      // Xatolikni qayta throw qilish
+      throw Exception('Playlist yuklashda xatolik: $e');
     }
   }
 
+  // PlaybackState ni transform qilish
+  PlaybackState _transformEvent(PlaybackEvent event) {
+    return PlaybackState(
+      controls: [
+        MediaControl.skipToPrevious,
+        if (player.playing) MediaControl.pause else MediaControl.play,
+        MediaControl.skipToNext,
+      ],
+      systemActions: const {
+        MediaAction.seek,
+        MediaAction.seekForward,
+        MediaAction.seekBackward,
+      },
+      androidCompactActionIndices: const [0, 1, 2],
+      processingState: const {
+        ProcessingState.idle: AudioProcessingState.idle,
+        ProcessingState.loading: AudioProcessingState.loading,
+        ProcessingState.buffering: AudioProcessingState.buffering,
+        ProcessingState.ready: AudioProcessingState.ready,
+        ProcessingState.completed: AudioProcessingState.completed,
+      }[player.processingState]!,
+      playing: player.playing,
+      updatePosition: player.position,
+      bufferedPosition: player.bufferedPosition,
+      speed: player.speed,
+      queueIndex: player.currentIndex,
+    );
+  }
+
+  // ========================================
+  // AUDIO SERVICE METHODS
+  // ========================================
+
   @override
   Future<void> play() async {
-    await _player.play();
+    try {
+      await player.play();
+    } catch (e) {
+      print('❌ Play error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> pause() async {
-    await _player.pause();
+    try {
+      await player.pause();
+    } catch (e) {
+      print('❌ Pause error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> stop() async {
-    await _player.stop();
-    await super.stop();
+    try {
+      await player.stop();
+      _isPlaylistLoaded = false;
+      await super.stop();
+    } catch (e) {
+      print('❌ Stop error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> seek(Duration position) async {
-    await _player.seek(position);
+    try {
+      await player.seek(position);
+    } catch (e) {
+      print('❌ Seek error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> skipToNext() async {
-    await _player.seekToNext();
+    try {
+      if (player.hasNext) {
+        await player.seekToNext();
+      }
+    } catch (e) {
+      print('❌ Skip to next error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> skipToPrevious() async {
-    await _player.seekToPrevious();
+    try {
+      if (player.hasPrevious) {
+        await player.seekToPrevious();
+      }
+    } catch (e) {
+      print('❌ Skip to previous error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> skipToQueueItem(int index) async {
-    if (index < 0 || index >= queue.value.length) return;
-    await _player.seek(Duration.zero, index: index);
+    try {
+      if (index >= 0 && index < queue.value.length) {
+        await player.seek(Duration.zero, index: index);
+      }
+    } catch (e) {
+      print('❌ Skip to queue item error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> setSpeed(double speed) async {
-    await _player.setSpeed(speed);
+    try {
+      await player.setSpeed(speed);
+    } catch (e) {
+      print('❌ Set speed error: $e');
+      rethrow;
+    }
   }
 
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
-    switch (repeatMode) {
-      case AudioServiceRepeatMode.none:
-        _player.setLoopMode(LoopMode.off);
-        break;
-      case AudioServiceRepeatMode.one:
-        _player.setLoopMode(LoopMode.one);
-        break;
-      case AudioServiceRepeatMode.all:
-        _player.setLoopMode(LoopMode.all);
-        break;
-      case AudioServiceRepeatMode.group:
-        _player.setLoopMode(LoopMode.all);
-        break;
+    try {
+      switch (repeatMode) {
+        case AudioServiceRepeatMode.none:
+          await player.setLoopMode(LoopMode.off);
+          break;
+        case AudioServiceRepeatMode.one:
+          await player.setLoopMode(LoopMode.one);
+          break;
+        case AudioServiceRepeatMode.all:
+          await player.setLoopMode(LoopMode.all);
+          break;
+        case AudioServiceRepeatMode.group:
+          await player.setLoopMode(LoopMode.all);
+          break;
+      }
+    } catch (e) {
+      print('❌ Set repeat mode error: $e');
+      rethrow;
     }
   }
 
-  void _notifyAudioHandlerAboutPlaybackEvents() {
-    _player.playbackEventStream.listen((PlaybackEvent event) {
-      final playing = _player.playing;
-      playbackState.add(playbackState.value.copyWith(
-        controls: [
-          MediaControl.skipToPrevious,
-          if (playing) MediaControl.pause else MediaControl.play,
-          MediaControl.stop,
-          MediaControl.skipToNext,
-        ],
-        systemActions: const {
-          MediaAction.seek,
-          MediaAction.seekForward,
-          MediaAction.seekBackward,
-        },
-        androidCompactActionIndices: const [0, 1, 3],
-        processingState: const {
-          ProcessingState.idle: AudioProcessingState.idle,
-          ProcessingState.loading: AudioProcessingState.loading,
-          ProcessingState.buffering: AudioProcessingState.buffering,
-          ProcessingState.ready: AudioProcessingState.ready,
-          ProcessingState.completed: AudioProcessingState.completed,
-        }[_player.processingState]!,
-        playing: playing,
-        updatePosition: _player.position,
-        bufferedPosition: _player.bufferedPosition,
-        speed: _player.speed,
-        queueIndex: event.currentIndex,
-      ));
-    });
-
-    // Position updates every 200ms
-    _player.positionStream.listen((position) {
-      playbackState.add(playbackState.value.copyWith(
-        updatePosition: position,
-      ));
-    });
-  }
-
-  void _listenForDurationChanges() {
-    _player.durationStream.listen((duration) {
-      var index = _player.currentIndex;
-      final newQueue = queue.value;
-      if (index == null || newQueue.isEmpty) return;
-
-      if (mediaItem.value?.duration != duration) {
-        final oldMediaItem = newQueue[index];
-        final newMediaItem = oldMediaItem.copyWith(duration: duration);
-        newQueue[index] = newMediaItem;
-        queue.add(newQueue);
-        mediaItem.add(newMediaItem);
-      }
-    });
-  }
-
-  void _listenForCurrentSongIndexChanges() {
-    _player.currentIndexStream.listen((index) {
-      final playlist = queue.value;
-      if (index == null || playlist.isEmpty) return;
-      if (index < playlist.length) {
-        mediaItem.add(playlist[index]);
-      }
-    });
-  }
-
-  void _listenForSequenceStateChanges() {
-    _player.sequenceStateStream.listen((sequenceState) {
-      final sequence = sequenceState.effectiveSequence;
-      if (sequence.isEmpty) return;
-
-      final items = sequence.map((source) => source.tag as MediaItem).toList();
-      queue.add(items);
-    });
-  }
-
-  Stream<Duration> get positionStream => _player.positionStream;
-  Stream<Duration?> get durationStream => _player.durationStream;
-  Stream<int?> get currentIndexStream => _player.currentIndexStream;
-
-  AudioPlayer get player => _player;
-
+  // Dispose
   @override
   Future<void> onTaskRemoved() async {
-    // App task manager dan o'chirilganda
-    await stop();
+    try {
+      await stop();
+    } catch (e) {
+      print('❌ onTaskRemoved error: $e');
+    }
   }
 
-  @override
-  Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
-    if (name == 'dispose') {
-      await _player.dispose();
-      super.stop();
+  Future<void> dispose() async {
+    try {
+      await player.dispose();
+    } catch (e) {
+      print('❌ Dispose error: $e');
     }
   }
 }

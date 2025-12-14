@@ -1,27 +1,25 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:audio_service/audio_service.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_downloader/flutter_downloader.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:sahhof/src/ui/main/detail/audio/audio_handler.dart';
 import 'package:sahhof/src/ui/main/detail/audio/backround_download.dart';
 import 'package:sahhof/src/ui/main/main_screen.dart';
 import 'package:sahhof/src/ui/splash/splash_screen.dart';
 import 'package:sahhof/src/utils/cache.dart';
-
 void main() async {
-  // WidgetsFlutterBinding - faqat bir marta
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Background download service initialize (optional)
+  await FlutterDownloader.initialize(
+    debug: true,
+    ignoreSsl: true,
+  );
   try {
     await BackgroundDownloadService().initialize();
   } catch (e) {
     print('Background download service init error: $e');
-    // Continue even if this fails
   }
-
-  // Cache service initialize
   await CacheService.init();
 
-  // Run app
   runApp(const MyApp());
 }
 
@@ -45,9 +43,7 @@ class MyApp extends StatelessWidget {
           home: child,
         );
       },
-      child: CacheService.getToken() == ''
-          ? const SplashScreen()
-          : const MainScreen(),
+      child:MainScreen(),
     );
   }
 }

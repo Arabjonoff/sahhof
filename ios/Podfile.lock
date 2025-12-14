@@ -4,6 +4,8 @@ PODS:
     - FlutterMacOS
   - audio_session (0.0.1):
     - Flutter
+  - device_info_plus (0.0.1):
+    - Flutter
   - Flutter (1.0.0)
   - flutter_downloader (0.0.1):
     - Flutter
@@ -29,6 +31,7 @@ PODS:
 DEPENDENCIES:
   - audio_service (from `.symlinks/plugins/audio_service/darwin`)
   - audio_session (from `.symlinks/plugins/audio_session/ios`)
+  - device_info_plus (from `.symlinks/plugins/device_info_plus/ios`)
   - Flutter (from `Flutter`)
   - flutter_downloader (from `.symlinks/plugins/flutter_downloader/ios`)
   - flutter_local_notifications (from `.symlinks/plugins/flutter_local_notifications/ios`)
@@ -44,6 +47,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/audio_service/darwin"
   audio_session:
     :path: ".symlinks/plugins/audio_session/ios"
+  device_info_plus:
+    :path: ".symlinks/plugins/device_info_plus/ios"
   Flutter:
     :path: Flutter
   flutter_downloader:
@@ -66,6 +71,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   audio_service: cab6c1a0eaf01b5a35b567e11fa67d3cc1956910
   audio_session: 19e9480dbdd4e5f6c4543826b2e8b0e4ab6145fe
+  device_info_plus: bf2e3232933866d73fe290f2942f2156cdd10342
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
   flutter_downloader: b7301ae057deadd4b1650dc7c05375f10ff12c39
   flutter_local_notifications: ff50f8405aaa0ccdc7dcfb9022ca192e8ad9688f

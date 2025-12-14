@@ -10,7 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiProvider{
   Duration durationTimeout = const Duration(seconds: 30);
-  String baseUrl = "http://buxoro-sf.uz/";
+  String baseUrl = "https://buxoro-sf.uz/";
 
   getReqHeader() {
     String token = CacheService.getToken();
@@ -220,12 +220,20 @@ class ApiProvider{
     return await getRequest(url,);
   }
   Future<HttpResult> getBooks(id)async{
-    String url = "${baseUrl}api/v1/books/?category__id=$id";
+    String url = "${baseUrl}api/v1/books/";
     if(id == 0){
       url = "${baseUrl}api/v1/books/";
     }else{
       url = "${baseUrl}api/v1/books/?category__id=$id";
     }
+    return await getRequest(url,);
+  }
+  Future<HttpResult> searchBook(query)async{
+    String url = "${baseUrl}api/v1/books/search/?query=$query";
+    return await getRequest(url,);
+  }
+  Future<HttpResult> getAuthorId(query)async{
+    String url = "${baseUrl}api/v1/books/?author__id=$query";
     return await getRequest(url,);
   }
   Future<HttpResult> getBookById(int id)async{

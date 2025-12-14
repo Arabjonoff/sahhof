@@ -131,34 +131,6 @@ class _AnimatedBannerWidgetState extends State<AnimatedBannerWidget>
               ),
             ),
 
-            // Indikatorlar
-            if (widget.bannerItems.length > 1)
-              Positioned(
-                bottom: 6,
-                left: 0,
-                right: 0,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    widget.bannerItems.length,
-                        (index) => GestureDetector(
-                      onTap: () => _goToPage(index),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.symmetric(horizontal: 4),
-                        width: _currentIndex == index ? 24 : 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: _currentIndex == index
-                              ? AppColors.primary
-                              : AppColors.primary.withOpacity(0.4),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
 
             // Gradient overlay (text uchun)
             if (widget.bannerItems[_currentIndex].text.isNotEmpty)
@@ -182,31 +154,59 @@ class _AnimatedBannerWidgetState extends State<AnimatedBannerWidget>
               ),
 
             // Text overlay
-            if (widget.bannerItems[_currentIndex].text.isNotEmpty)
+            // if (widget.bannerItems[_currentIndex].text.isNotEmpty)
+            //   Positioned(
+            //     bottom: 20,
+            //     left: 16,
+            //     right: 16,
+            //     child: AnimatedSwitcher(
+            //       duration: const Duration(milliseconds: 300),
+            //       child: Text(
+            //         widget.bannerItems[_currentIndex].text,
+            //         key: ValueKey(_currentIndex),
+            //         style: const TextStyle(
+            //           color: Colors.grey,
+            //           fontSize: 16,
+            //           fontWeight: FontWeight.w600,
+            //           shadows: [
+            //             Shadow(
+            //               offset: Offset(0, 1),
+            //               blurRadius: 3,
+            //               color: Colors.black54,
+            //             ),
+            //           ],
+            //         ),
+            //         textAlign: TextAlign.center,
+            //         maxLines: 2,
+            //         overflow: TextOverflow.ellipsis,
+            //       ),
+            //     ),
+            //   ),
+
+            if (widget.bannerItems.length > 1)
               Positioned(
-                bottom: 40,
-                left: 16,
-                right: 16,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 300),
-                  child: Text(
-                    widget.bannerItems[_currentIndex].text,
-                    key: ValueKey(_currentIndex),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      shadows: [
-                        Shadow(
-                          offset: Offset(0, 1),
-                          blurRadius: 3,
-                          color: Colors.black54,
+                bottom: 6,
+                left: 0,
+                right: 0,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    widget.bannerItems.length,
+                        (index) => GestureDetector(
+                      onTap: () => _goToPage(index),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        width: _currentIndex == index ? 24 : 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: _currentIndex == index
+                              ? AppColors.white
+                              : AppColors.white.withOpacity(0.4),
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                      ],
+                      ),
                     ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
@@ -235,7 +235,7 @@ class _BannerItemWidget extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: CachedNetworkImage(
           imageUrl: item.image,
-          fit: BoxFit.contain,
+          fit: BoxFit.cover,
           placeholder: (context, url) => const Center(
             child: CircularProgressIndicator.adaptive(),
           ),

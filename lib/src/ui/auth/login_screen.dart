@@ -45,7 +45,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       SizedBox(height: 24.spMin,),
                       Center(child: Text(
-                        "Sahhof", style: AppStyle.heading1(AppColors.black),)),
+                        "Buxoro sahiflari", style: AppStyle.heading1(AppColors.black),)),
                       SizedBox(height: 14.spMin,),
                       Center(
                         child: SizedBox(
@@ -159,7 +159,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         // CacheService.saveUserFirstName(res.result["first_name"]);
                         CacheService.saveToken(res.result["access"]);
                         CacheService.refreshToken(res.result["refresh"]);
-                        Navigator.push(
+                        Navigator.popUntil(context, (predicate) => predicate.isFirst);
+                        Navigator.pushReplacement(
                             context, MaterialPageRoute(builder: (ctx) {
                           return MainScreen();
                         }));

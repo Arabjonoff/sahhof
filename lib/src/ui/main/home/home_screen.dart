@@ -7,14 +7,17 @@ import 'package:sahhof/src/model/banner/banner_model.dart';
 import 'package:sahhof/src/model/book/book_model.dart';
 import 'package:sahhof/src/model/category/category_model.dart';
 import 'package:sahhof/src/theme/app_style.dart';
+import 'package:sahhof/src/ui/auth/register_screen.dart';
 import 'package:sahhof/src/ui/main/detail/detail_screen.dart';
 import 'package:sahhof/src/ui/main/profile/profile_screen.dart';
+import 'package:sahhof/src/ui/main/search/serach_screen.dart';
 import 'package:sahhof/src/utils/cache.dart';
 import 'package:sahhof/src/widget/banner_widget.dart';
 import 'package:sahhof/src/widget/book_card_widget.dart';
 import 'package:sahhof/src/widget/shimmer_widget.dart';
 
 import '../../../theme/app_colors.dart';
+import '../search/books_search_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,6 +47,11 @@ class _HomeScreenState extends State<HomeScreen> {
           child: CircleAvatar(
               backgroundColor: AppColors.white,
               child: IconButton(onPressed: (){
+                if(CacheService.getToken().isEmpty){
+                  Navigator.push(context, MaterialPageRoute(builder: (builder){
+                    return RegisterScreen();
+                  }));
+                }
                 Navigator.push(context, MaterialPageRoute(builder: (ctx){
                   return ProfileScreen();
                 }));
@@ -52,12 +60,12 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Assalomu alayakum",style: TextStyle(fontSize: 18),),
+            Text("Assalomu alaykum",style: TextStyle(fontSize: 18),),
             Text(CacheService.getLogin(),style: TextStyle(fontSize: 18,color: AppColors.grey),),
           ],
         ),
         actions: [
-          IconButton(onPressed: (){}, icon: Icon(Icons.notifications,color: AppColors.primary,))
+          // IconButton(onPressed: (){}, icon: Icon(Icons.notifications,color: AppColors.primary,))
         ],
       ),
       backgroundColor: AppColors.background,
@@ -70,7 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 var data = snapshot.data!;
                 return AnimatedBannerWidget(
                   bannerItems: data,
-                  height: 150.sp,
+                  height: 180.sp,
                   autoPlayDuration: const Duration(seconds: 4),
                   animationDuration: const Duration(milliseconds: 800),
                   borderRadius: BorderRadius.circular(16),
@@ -86,32 +94,23 @@ class _HomeScreenState extends State<HomeScreen> {
               }
             }
           ),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            margin: EdgeInsets.symmetric(horizontal: 16.w,vertical: 16.h),
-            width: MediaQuery.of(context).size.width,
-            height: 50.h,
-            decoration: BoxDecoration(
-              color: AppColors.blue.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Center(
-              child: TextField(
-                textCapitalization: TextCapitalization.sentences,
-                cursorColor: AppColors.black,
-                keyboardType: TextInputType.text,
-                textInputAction: TextInputAction.search,
-                style: TextStyle(
-                  color: AppColors.black,
-                ),
-                decoration: InputDecoration(
-                  border: InputBorder.none,
-                  hintText: "Kitoblar yoki Mualliflarni qidirish...",
-                  hintStyle: TextStyle(
-                    color: AppColors.grey,
-                  )
-                )
+          GestureDetector(
+            onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (builder){
+                return BooksSearchScreen();
+              }));
+            },
+            child: Container(
+              alignment: Alignment.centerLeft,
+              padding: EdgeInsets.symmetric(horizontal: 16.w),
+              margin: EdgeInsets.symmetric(horizontal: 16.w,vertical: 16.h),
+              width: MediaQuery.of(context).size.width,
+              height: 50.h,
+              decoration: BoxDecoration(
+                color: AppColors.blue.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child:Text("Kitoblar yoki Mualliflarni qidirish...",style: AppStyle.font600(AppColors.grey),)
             ),
           ),
           SizedBox(
@@ -184,7 +183,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       itemBuilder: (ctx,index){
                         return BookCardWidget(image: data[index].coverImage, onTap: () {
                           Navigator.push(context, MaterialPageRoute(builder: (context) => DetailScreen(id: data[index].id,)));
-                        }, title: data[index].title, author: data[index].author.fullName.toString(), description: data[index].description,);
+                        }, title: data[index].title, author: data[index].author.fullName.toString(), description: data[index].description, star: data[index].rating,);
                       });
                 }else{
                   return CustomShimmer(child: ListView.builder(
@@ -192,15 +191,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       scrollDirection: Axis.horizontal,
                       itemCount: 3,
                       itemBuilder: (ctx,index){
-                        return BookCardWidget(image: '', onTap: () {  }, title: '', author: '', description: '',);
+                        return BookCardWidget(image: '', onTap: () {  }, title: '', author: '', description: '',star: '',);
                       }));
                 }
               }
             )
-          ),
-          ListTile(
-            title: Text("Yangi qo'shilgan kitoblar",style: AppStyle.font600(AppColors.black),),
-            trailing: TextButton(onPressed: (){}, child: Text("Batafsil",style: AppStyle.font400(AppColors.blue),)),
           ),
           // Container(
           //     color: AppColors.white,
